@@ -12,3 +12,18 @@ faiss-cpu
 chromadb
 # Optional: Add pdfminer.six if PyPDF2 is insufficient
 # pdfminer.six
+# requirements.txt
+
+# GenAI Analysis and Parsing
+python-docx
+PyPDF2
+ollama
+pydantic
+# Job Scraping via JobSpy (this will pull in pandas, playwright, etc.)
+jobspy
+# Note: You might need specific versions later if conflicts arise
+pandas
+playwright
+beautifulsoup4
+requests
+rich # Often used by jobspy for nice output
