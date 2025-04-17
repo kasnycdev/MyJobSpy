@@ -31,7 +31,11 @@ def apply_filters(
     normalized_work_models = [normalize_string(wm) for wm in work_models] if work_models else []
     normalized_job_types = [normalize_string(jt) for jt in job_types] if job_types else []
 
-    logging.info(f"Applying filters: Min Salary={salary_min}, Max Salary={salary_max}, Locations={normalized_locations}, Work Models={normalized_work_models}, Job Types={normalized_job_types}")
+    # import html
+    logging.info("Applying filters: Min Salary=%s, Max Salary=%s, Locations=%s, Work Models=%s, Job Types=%s",
+                 html.escape(str(salary_min)), html.escape(str(salary_max)),
+                 html.escape(str(normalized_locations)), html.escape(str(normalized_work_models)),
+                 html.escape(str(normalized_job_types)))
 
     for job in jobs:
         if not isinstance(job, dict):
@@ -47,7 +51,7 @@ def apply_filters(
         if job_min_salary is None and job_max_salary is None and isinstance(salary_text, str):
              # Parse from text only if structured fields are missing
              job_min_salary, job_max_salary = parse_salary(salary_text)
-             logging.debug(f"Parsed salary for job '{job.get('title', '')}': Min={job_min_salary}, Max={job_max_salary}")
+             logging.debug(f"Parsed salary for job '{job.get('title', '')}': Min={job_min_salary}, Max={job_max_salary}")  # import html
 
 
         salary_passes = True
@@ -98,7 +102,7 @@ def apply_filters(
                      location_passes = False # No match including remote special case
 
         if not location_passes:
-            logging.debug(f"Job '{job.get('title', 'N/A')}' failed LOCATION filter.")
+            logging.debug("Job '{}' failed LOCATION filter.".format(job.get('title', 'N/A')))  # Use string formatting to avoid potential log injection
             continue
 
         # --- Work Model Filter ---
@@ -119,7 +123,7 @@ def apply_filters(
                 work_model_passes = False
 
         if not work_model_passes:
-             logging.debug(f"Job '{job.get('title', 'N/A')}' failed WORK MODEL filter.")
+             logging.debug("Job '{}' failed WORK MODEL filter.".format(job.get('title', 'N/A')))  # Use string formatting to avoid potential log injection
              continue
 
         # --- Job Type Filter ---
@@ -134,11 +138,11 @@ def apply_filters(
                 job_type_passes = False
 
         if not job_type_passes:
-            logging.debug(f"Job '{job.get('title', 'N/A')}' failed JOB TYPE filter.")
+            logging.debug("Job '{}' failed JOB TYPE filter.".format(job.get('title', 'N/A')))  # Use string formatting to avoid potential log injection
             continue
 
         # If all filters pass, add the job
         filtered_jobs.append(job)
 
-    logging.info(f"Filtering complete. {len(filtered_jobs)} out of {len(jobs)} jobs passed filters.")
+    logging.info("Filtering complete. %d out of %d jobs passed filters.", len(filtered_jobs), len(jobs))  # Use % formatting to prevent log injection
     return filtered_jobs

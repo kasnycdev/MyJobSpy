@@ -8,3 +8,5 @@ OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3:instruct") # Or "mistral:instru
 OLLAMA_REQUEST_TIMEOUT = int(os.getenv("OLLAMA_REQUEST_TIMEOUT", 120)) # Timeout in seconds
 
 # You can add other configurations here if needed
+print("--- config.py loaded ---")
+print(f"OLLAMA_BASE_URL inside config.py: {OLLAMA_BASE_URL}")

@@ -1,6 +1,8 @@
 import re
 import logging
 
+# import html  # Used for HTML escaping to prevent log injection
+
 def parse_salary(salary_text: Optional[str], target_currency: str = "USD") -> tuple[Optional[int], Optional[int]]:
     """
     Very basic salary text parser. Tries to extract min/max annual salary.
@@ -56,7 +58,7 @@ def parse_salary(salary_text: Optional[str], target_currency: str = "USD") -> tu
         if salary_val > 5000: # Arbitrary threshold for likely annual salary
              return salary_val, salary_val
         else:
-             logging.debug(f"Ignoring potentially non-annual salary value: {salary_val} in '{salary_text}'")
+             logging.debug(f"Ignoring potentially non-annual salary value: {salary_val} in '{html.escape(salary_text)}'")
              return None, None
     elif len(single_match) > 1:
          # Multiple numbers without clear range words - could be complex, take highest/lowest?
@@ -66,7 +68,7 @@ def parse_salary(salary_text: Optional[str], target_currency: str = "USD") -> tu
          elif len(nums) == 1:
              return nums[0], nums[0]
 
-    logging.debug(f"Could not parse salary range from text: '{salary_text}'")
+    logging.debug(f"Could not parse salary range from text: '{html.escape(salary_text)}'")
     return None, None
 
 

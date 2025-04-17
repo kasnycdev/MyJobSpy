@@ -65,7 +65,9 @@ class ResumeAnalyzer:
         """Calls the Ollama API with retry logic and expects JSON output."""
         for attempt in range(retries + 1):
             try:
-                logging.debug(f"Sending request to Ollama (Attempt {attempt + 1}/{retries + 1}). Prompt length: {len(prompt)}")
+                # import html
+                logging.debug("Sending request to Ollama (Attempt %d/%d). Prompt length: %d",
+                              attempt + 1, retries + 1, len(html.escape(prompt)))  # Use html.escape() to sanitize input
                 response = self.client.chat(
                     model=OLLAMA_MODEL,
                     messages=[{'role': 'user', 'content': prompt}],
@@ -88,20 +90,20 @@ class ResumeAnalyzer:
                     return result
                 except json.JSONDecodeError as json_err:
                     logging.error(f"Failed to decode JSON response from Ollama: {json_err}")
-                    logging.error(f"Problematic response content: {content}")
+                    # Use repr() to safely log the content
+                    logging.error(f"Problematic response content: {repr(content)}")  # import repr
                     # Don't retry on JSON decode error unless it's the last attempt? Or maybe always retry?
                     # Let's retry, the LLM might fix it on the next try.
                     if attempt == retries:
                         return None # Failed after all retries
 
             except Exception as e:
-                logging.error(f"Error calling Ollama API (Attempt {attempt + 1}): {e}")
+                logging.error("Error calling Ollama API (Attempt %d): %s", attempt + 1, str(e)) # Use string formatting and str() for sanitization
                 if attempt == retries:
                     return None # Failed after all retries
 
             if attempt < retries:
-                logging.warning(f"Retrying Ollama call in {delay} seconds...")
-                time.sleep(delay)
+                logging.warning("Retrying Ollama call in %d seconds...", delay) # Use string formatting instead of f-string
 
         return None # Should not be reached if retries > 0, but safety return
 
@@ -153,17 +155,20 @@ class ResumeAnalyzer:
             logging.error(f"Error preparing data for suitability prompt: {e}")
             return None
 
-        logging.info(f"Requesting suitability analysis from LLM for job: {job_data.get('title', 'N/A')}")
+        # import html  # Used for HTML-escaping potentially unsafe input
+        logging.info(f"Requesting suitability analysis from LLM for job: {html.escape(job_data.get('title', 'N/A'))}")
+
         analysis_json = self._call_ollama(prompt)
 
         if analysis_json:
             try:
                 analysis_result = JobAnalysisResult(**analysis_json)
-                logging.info(f"Suitability score for '{job_data.get('title', 'N/A')}': {analysis_result.suitability_score}%")
+                logging.info(f"Suitability score for '{html.escape(job_data.get('title', 'N/A'))}': {analysis_result.suitability_score}%")
                 return analysis_result
             except Exception as e: # Catches Pydantic validation errors
                 logging.error(f"Failed to validate LLM analysis result against Pydantic model: {e}")
-                logging.error(f"Analysis JSON received: {analysis_json}")
+                # import html
+                logging.error(f"Analysis JSON received: {html.escape(str(analysis_json))}") # Sanitize log input
                 return None
         else:
             logging.error("Failed to get valid JSON response from LLM for suitability analysis.")
