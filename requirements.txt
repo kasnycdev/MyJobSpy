@@ -1,5 +1,6 @@
 python-docx
 PyPDF2
+pdfminer.six
 ollama
 pydantic
 transformers
