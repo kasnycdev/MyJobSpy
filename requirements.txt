@@ -1,0 +1,6 @@
+python-docx
+PyPDF2
+ollama
+pydantic
+# Optional: Add pdfminer.six if PyPDF2 is insufficient
+# pdfminer.six

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
-  <component name="GithubDefaultAccount">
-    <option name="defaultAccountId" value="804a641a-75d4-4f5a-862d-565251c8e5e9" />
+  <component name="Black">
+    <option name="sdkName" value="Python 3.12 (MyJobSpy)" />
   </component>
   <component name="ProjectRootManager" version="2" project-jdk-name="Python 3.12 (MyJobSpy)" project-jdk-type="Python SDK" />
 </project>
