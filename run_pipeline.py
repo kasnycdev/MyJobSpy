@@ -97,38 +97,73 @@ def scrape_jobs_with_jobspy(
         return None
 
 
+
 def convert_and_save_scraped(jobs_df: pd.DataFrame, output_path: str) -> List[Dict[str, Any]]:
-    """Converts DataFrame to list of dicts and saves to JSON."""
+    """Converts DataFrame to list of dicts and saves to JSON, handling date objects."""
     log.info(f"Converting DataFrame to list and saving to {output_path}")
 
-    # Rename columns for consistency with analysis expectations (adjust if jobspy changes)
+    # --- COLUMN RENAMING (Keep as before) ---
     rename_map = {
         'job_url': 'url',
         'job_type': 'employment_type', # Example, check jobspy output
         'salary': 'salary_text',       # Pass raw salary text for parsing/LLM
         'benefits': 'benefits_text'    # Pass raw benefits text
+        # Add 'date_posted': 'date_posted' if you want to keep the original name and handle it below
     }
-    # Only rename columns that actually exist in the DataFrame
     actual_rename_map = {k: v for k, v in rename_map.items() if k in jobs_df.columns}
     if actual_rename_map:
         jobs_df = jobs_df.rename(columns=actual_rename_map)
         log.debug(f"Renamed DataFrame columns: {actual_rename_map}")
 
-    # Ensure essential columns for filtering/analysis exist, fill with '' if missing
+
+    # --- HANDLE DATE COLUMNS (NEW/MODIFIED STEP) ---
+    # List potential names for date columns used by jobspy
+    possible_date_columns = ['date_posted', 'posted_date', 'date'] # Adjust based on jobspy output
+    for col in possible_date_columns:
+        if col in jobs_df.columns:
+            log.debug(f"Processing potential date column '{col}' for JSON serialization.")
+            # Check if the dtype is already object (potentially mixed types) or a date/datetime type
+            if pd.api.types.is_datetime64_any_dtype(jobs_df[col]) or jobs_df[col].dtype == 'object':
+                 try:
+                     # Convert to datetime objects first (coerce errors to NaT - Not a Time)
+                     # This handles cases where the column might have mixed types (strings, dates)
+                     jobs_df[col] = pd.to_datetime(jobs_df[col], errors='coerce')
+
+                     # Now convert valid datetime objects to ISO format string 'YYYY-MM-DD'
+                     # NaT values will become None after strftime, which we handle later with fillna('')
+                     jobs_df[col] = jobs_df[col].dt.strftime('%Y-%m-%d')
+                     log.debug(f"Successfully converted column '{col}' dates to string format.")
+                 except Exception as date_err:
+                     log.warning(f"Could not fully process date column '{col}'. Error: {date_err}. Attempting direct string conversion.")
+                     # Fallback: try converting whatever is in the column to string directly
+                     jobs_df[col] = jobs_df[col].astype(str)
+            else:
+                 # If it's some other type (like int/float), leave it but log it
+                 log.debug(f"Column '{col}' is not datetime or object type ({jobs_df[col].dtype}), skipping date conversion.")
+
+
+    # --- ENSURE ESSENTIAL COLUMNS (Keep as before) ---
     essential_cols = ['title', 'company', 'location', 'description', 'url',
-                      'salary_text', 'employment_type', 'benefits_text', 'skills'] # Added 'skills'
+                      'salary_text', 'employment_type', 'benefits_text', 'skills',
+                      'date_posted'] # Ensure date_posted is listed if you want it
     for col in essential_cols:
          if col not in jobs_df.columns:
               log.warning(f"Column '{col}' missing from scraped data, adding as empty.")
-              jobs_df[col] = '' # Use empty string instead of None for easier JSON handling
+              jobs_df[col] = '' # Use empty string
 
-    # Convert NaN/NaT to empty string for JSON compatibility
+
+    # --- FILL NA/NaT (Keep as before) ---
+    # This will convert None (from failed strftime on NaT) and any other NaN to ''
     jobs_df = jobs_df.fillna('')
+    log.debug("Filled NA/NaN values with empty strings.")
 
-    # Convert DataFrame to list of dictionaries
+
+    # --- CONVERT TO DICT (Keep as before) ---
     jobs_list = jobs_df.to_dict('records')
+    log.debug(f"Converted DataFrame to list of {len(jobs_list)} dictionaries.")
 
-    # Save to JSON
+
+    # --- SAVE TO JSON (Keep as before - should work now) ---
     output_dir = os.path.dirname(output_path)
     if output_dir:
         os.makedirs(output_dir, exist_ok=True)
@@ -138,6 +173,20 @@ def convert_and_save_scraped(jobs_df: pd.DataFrame, output_path: str) -> List[Di
             json.dump(jobs_list, f, indent=4)
         log.info(f"Saved {len(jobs_list)} scraped jobs to {output_path}")
         return jobs_list
+    except TypeError as json_err:
+         # If it still fails, log the problematic record
+         log.error(f"JSON Serialization Error even after date conversion: {json_err}", exc_info=True)
+         # Try to find the problematic record (this is inefficient for large lists)
+         for i, record in enumerate(jobs_list):
+              try:
+                   json.dumps(record)
+              except TypeError:
+                   log.error(f"Problematic record at index {i}: {record}")
+                   # Log types of values in the problematic record
+                   for k, v in record.items():
+                        log.error(f"  Field '{k}': Type={type(v)}, Value='{str(v)[:100]}...'")
+                   break # Log first problematic record only
+         return [] # Return empty list on save failure
     except Exception as e:
         log.error(f"Error saving scraped jobs to JSON file {output_path}: {e}", exc_info=True)
         return [] # Return empty list on save failure
