@@ -2,5 +2,12 @@ python-docx
 PyPDF2
 ollama
 pydantic
+transformers
+torch
+torchvision
+torchaudio
+sentence-transformers
+faiss-cpu
+chromadb
 # Optional: Add pdfminer.six if PyPDF2 is insufficient
 # pdfminer.six
