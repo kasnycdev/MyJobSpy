@@ -1,0 +1,32 @@
+You are an expert HR assistant tasked with extracting structured information from a resume text.
+Analyze the following resume text and extract the key information requested below.
+Output *only* a valid JSON object containing the extracted data, matching the specified structure. Do not include any introductory text, explanations, or markdown formatting like ```json.
+
+Resume Text:
+---
+{resume_text}
+---
+
+JSON Structure to populate:
+{{
+  "summary": "string (Brief professional summary, max 3 sentences)",
+  "skills": ["string (List of key technical and soft skills mentioned, be comprehensive)"],
+  "experience": [
+    {{
+      "title": "string (Job title)",
+      "company": "string (Company name)",
+      "years": "float or string (Approximate years in role, e.g., 2.5 or '3 years')",
+      "description": "string (Brief summary of responsibilities/achievements)"
+    }}
+  ],
+  "education": [
+    {{
+      "degree": "string (Degree name)",
+      "institution": "string (Institution name)",
+      "years": "string (Years attended or graduation year)"
+    }}
+  ],
+  "total_years_experience": "float or string (Estimate total years of relevant professional experience based on the text, provide a single number if possible)"
+}}
+
+Extracted JSON:

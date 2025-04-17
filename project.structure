@@ -1,0 +1,24 @@
+MyJobSpy/
+├── .gitignore
+├── README.md
+├── requirements.txt
+├── config.py             # Central configuration
+├── run_pipeline.py       # NEW: Main execution script
+├── main_matcher.py       # Refactored analysis functions
+├── parsers/
+│   ├── __init__.py
+│   ├── resume_parser.py  # (Content unchanged from previous versions)
+│   └── job_parser.py     # (Kept, but less critical now)
+├── analysis/
+│   ├── __init__.py
+│   ├── analyzer.py       # Updated with prompt loading, retries
+│   ├── models.py         # (Content unchanged from previous versions)
+│   └── prompts/          # NEW: Directory for prompt files
+│       ├── resume_extraction.prompt
+│       └── suitability_analysis.prompt
+├── filtering/
+│   ├── __init__.py
+│   ├── filter.py         # Updated logging/checks
+│   └── filter_utils.py   # (Content unchanged from previous versions)
+└── utils/                # Optional
+    └── __init__.py

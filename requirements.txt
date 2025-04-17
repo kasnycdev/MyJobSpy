@@ -1,29 +1,14 @@
-python-docx
-PyPDF2
-pdfminer.six
-ollama
-pydantic
-transformers
-torch
-torchvision
-torchaudio
-sentence-transformers
-faiss-cpu
-chromadb
-# Optional: Add pdfminer.six if PyPDF2 is insufficient
-# pdfminer.six
-# requirements.txt
-
 # GenAI Analysis and Parsing
-python-docx
-PyPDF2
-ollama
-pydantic
-# Job Scraping via JobSpy (this will pull in pandas, playwright, etc.)
-jobspy
-# Note: You might need specific versions later if conflicts arise
-pandas
-playwright
-beautifulsoup4
-requests
-rich # Often used by jobspy for nice output
+python-docx >= 1.1.0
+PyPDF2 >= 3.0.0
+ollama >= 0.2.0
+pydantic >= 2.5.0
+
+# Job Scraping via JobSpy (this pulls in pandas, playwright, beautifulsoup4, httpx, etc.)
+jobspy >= 1.1.2  # Use a recent version
+
+# UX and Utilities
+rich >= 13.0.0
+
+# Ensure pandas is available if jobspy doesn't strictly enforce it as a direct dep
+pandas >= 2.0.0

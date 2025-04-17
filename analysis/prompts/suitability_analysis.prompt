@@ -1,0 +1,32 @@
+You are an expert HR analyst comparing a candidate's resume against a job description.
+Analyze the provided structured resume data and the job description text.
+Provide a detailed suitability analysis, focusing on skills, experience, qualifications, salary (if available), and benefits (if mentioned).
+
+Candidate Resume Data (JSON):
+---
+{resume_data_json}
+---
+
+Job Mandate / Description (JSON Object - focus on 'description', 'title', 'required_skills', 'qualifications', 'salary_text', 'benefits_text' fields if they exist, otherwise use the full object):
+---
+{job_data_json}
+---
+
+Based on the comparison, provide a suitability score from 0 to 100, where 100 is a perfect match.
+Also provide a justification and fill in the other fields as accurately as possible. Consider the requirements mentioned in the job description as the primary benchmark.
+
+Output *only* a valid JSON object matching the structure below. Do not include any introductory text, explanations, or markdown formatting like ```json.
+
+JSON Structure to populate:
+{{
+  "suitability_score": "integer (0-100, based on overall fit with required qualifications)",
+  "justification": "string (Detailed explanation for the score, highlighting strengths and weaknesses regarding skills, experience, qualifications. Mention specific keyword matches or misses.)",
+  "skill_match": "boolean (Do the candidate's skills strongly align with the *required* skills mentioned in the job? Consider keywords and context.)",
+  "experience_match": "boolean (Does the candidate's total years and type of experience align with the job requirements? Consider both total years and specific role experience mentioned.)",
+  "qualification_match": "boolean (Does the candidate meet the essential qualifications like degrees or certifications mentioned?)",
+  "salary_alignment": "string (Assess potential salary fit based on candidate's experience level vs. job's salary range/text. Options: 'Likely Fit', 'Potentially Below Range', 'Potentially Above Range', 'Insufficient Data')",
+  "benefit_alignment": "string (Briefly note any alignment or mention of key benefits if discussed in both resume context and job. E.g., 'Mentions Health/Retirement', 'Standard Benefits Likely', 'Insufficient Data')",
+  "missing_keywords": ["string (List a few key *required* skills or qualifications from the job description that seem absent or weak in the resume)"]
+}}
+
+Analysis JSON:
