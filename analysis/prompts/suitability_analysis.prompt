@@ -18,30 +18,23 @@ Based on this detailed comparison, generate a JSON output containing two top-lev
 
 Output *only* the final, complete JSON object containing these two keys (`original_job_data` and `analysis`). Do not include any introductory text, explanations, or markdown formatting like ```json outside of the JSON structure itself.
 
-JSON Structure to populate:
+JSON Structure Template (Fill with your analysis):
 {{
   "original_job_data": {{
       // The entire content of the '{job_data_json}' input dictionary goes here.
-      // Preserve all original fields and their values exactly.
       "title": "...",
       "company": "...",
-      "location": "...",
-      "description": "...",
-      "skills": ["...", "..."],
-      "url": "...",
-      "employment_type": "...",
-      "salary_text": "...",
       // etc. - ALL original fields from the input job data.
   }},
   "analysis": {{
-    "suitability_score": "integer (0-100, based on overall fit with required qualifications, skills, and experience mentioned in the job posting, considering the candidate's resume data)",
-    "justification": "string (Detailed explanation for the score. Explicitly compare the candidate's experience duration, specific roles, technical skills, management skills, and key accomplishments against the job requirements. Highlight key strengths and specific gaps for this role based on the job description.)",
-    "skill_match": "boolean (Considering both management and technical skills from the resume, do they strongly align with the skills explicitly required or heavily implied in the job description?)",
-    "experience_match": "boolean (Does the candidate's total years of experience AND the nature of their roles/accomplishments (from resume 'experience' and 'key_accomplishments') align well with the experience level and responsibilities described in the job posting?)",
-    "qualification_match": "boolean (Does the candidate meet the essential educational or certification qualifications mentioned in the job posting, based on the resume's 'education' section?)",
-    "salary_alignment": "string (Assess potential salary fit based on the job's salary info [if present] vs. candidate's profile [experience level, roles]. Options: 'Likely Fit', 'Potentially Below Range', 'Potentially Above Range', 'Insufficient Job Data')",
-    "benefit_alignment": "string (Assess benefit alignment based on job's 'benefits_text' [if present]. Options: 'Mentions Standard Benefits', 'Specific Benefit Alignment', 'Insufficient Data')",
-    "missing_keywords": ["string (List a few specific, important keywords [skills, technologies, qualifications, concepts] mentioned as required in the job description that seem absent or underrepresented in the candidate's resume.)"]
+    "suitability_score": 0, // Provide an integer score (0-100)
+    "justification": "Detailed explanation comparing resume to job requirements...", // Provide detailed justification string
+    "skill_match": false, // Provide boolean (true/false)
+    "experience_match": false, // Provide boolean (true/false)
+    "qualification_match": false, // Provide boolean (true/false)
+    "salary_alignment": "Insufficient Data", // Choose from: 'Likely Fit', 'Potentially Below Range', 'Potentially Above Range', 'Insufficient Data'
+    "benefit_alignment": "Insufficient Data", // Choose from: 'Mentions Standard Benefits', 'Specific Benefit Alignment', 'Insufficient Data'
+    "missing_keywords": ["keyword1", "keyword2"] // Provide list of specific missing keyword strings
   }}
 }}
 
