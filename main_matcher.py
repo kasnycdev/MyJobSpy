@@ -52,7 +52,7 @@ def analyze_jobs(
             log.warning(f"Analysis failed for job: {job_title}")
             # Create a placeholder analysis if desired, or skip
             analysis_result = JobAnalysisResult(
-                 suitability_score=0, # Indicate failure
+                 suitability_score=-1, # Indicate failure
                  justification="Analysis failed or was skipped.",
                  skill_match=None, experience_match=None, qualification_match=None,
                  salary_alignment="N/A", benefit_alignment="N/A", missing_keywords=[]
