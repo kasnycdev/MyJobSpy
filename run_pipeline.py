@@ -183,7 +183,8 @@ def print_summary_table(results_json: List[Dict[str, Any]], top_n: int = 10):
         analysis = result.get('analysis', {})
         original = result.get('original_job_data', {})
         score = analysis.get('suitability_score', -1)
-        if score == -1: continue # Skip placeholder entries with score 0 from failed analysis
+        # Updated logic: Check if score is 0 (placeholder for failed analysis) or None (unexpected case)
+        if score is None or score == 0: continue # Skip placeholder/failed entries
 
         score_str = f"{score}%"
         table.add_row(
@@ -196,7 +197,7 @@ def print_summary_table(results_json: List[Dict[str, Any]], top_n: int = 10):
         count += 1
 
     if count == 0:
-         console.print("[yellow]No successfully analyzed jobs to display in summary.[/yellow]")
+         console.print("[yellow]No successfully analyzed jobs with score > 0 to display in summary.[/yellow]")
     else:
          console.print(table)
 
@@ -211,16 +212,15 @@ def run_pipeline():
     # --- Scraping Arguments ---
     scrape_group = parser.add_argument_group('Scraping Options (JobSpy)')
     scrape_group.add_argument("--search", required=True, help="Job title, keywords, or company.")
-    scrape_group.add_argument("--location", default="Remote", help="Location to search (e.g., 'New York', 'Remote').")
-    # --- ADDED BACK STANDARD SCRAPING ARGS ---
+    # Removed default="Remote" to encourage specifying location or using filters
+    scrape_group.add_argument("--location", default=None, help="Primary location for scraping (e.g., 'New York', 'Canada'). Overridden if --filter-remote-country is used.")
     scrape_group.add_argument("--sites", default=",".join(config.DEFAULT_SCRAPE_SITES),
                               help="Comma-separated sites (e.g., linkedin,indeed,zip_recruiter). Check JobSpy docs.")
-    scrape_group.add_argument("--results", type=int, default=config.DEFAULT_RESULTS_LIMIT, help="Approx total jobs to fetch per site.") # Clarified help text
+    scrape_group.add_argument("--results", type=int, default=config.DEFAULT_RESULTS_LIMIT, help="Approx total jobs to fetch per site.")
     scrape_group.add_argument("--hours-old", type=int, default=config.DEFAULT_HOURS_OLD, help="Max job age in hours (0=disable).")
     scrape_group.add_argument("--country-indeed", default=config.DEFAULT_COUNTRY_INDEED, help="Country for Indeed search ('usa', 'uk', etc.).")
     scrape_group.add_argument("--proxies", help="Comma-separated proxies ('http://user:pass@host:port,...').")
     scrape_group.add_argument("--offset", type=int, default=0, help="Search results offset.")
-    # --- END ADDED BACK ---
     scrape_group.add_argument("--scraped-jobs-file", default=config.DEFAULT_SCRAPED_JSON, help="Intermediate file for scraped jobs.")
 
     # --- Analysis Arguments ---
@@ -233,14 +233,13 @@ def run_pipeline():
     filter_group = parser.add_argument_group('Filtering Options (Applied After Analysis)')
     filter_group.add_argument("--min-salary", type=int, help="Minimum desired annual salary.")
     filter_group.add_argument("--max-salary", type=int, help="Maximum desired annual salary.")
-    # filter_group.add_argument("--filter-locations", help="DEPRECATED. Use proximity/remote filters.") # Keep commented or remove
     filter_group.add_argument("--filter-work-models", help="Standard work models (e.g., 'Remote,Hybrid').")
     filter_group.add_argument("--filter-job-types", help="Comma-separated job types (e.g., 'Full-time')")
 
     # --- Advanced Location Filters ---
     adv_loc_group = parser.add_argument_group('Advanced Location Filtering')
     adv_loc_group.add_argument("--filter-remote-country",
-                               help="Filter for REMOTE jobs within a specific country (e.g., 'USA').")
+                               help="Filter for REMOTE jobs within a specific country (e.g., 'USA'). If set, this country is used for the primary scrape location.")
     adv_loc_group.add_argument("--filter-proximity-location",
                                help="Reference location for proximity filtering (e.g., 'New York, NY').")
     adv_loc_group.add_argument("--filter-proximity-range", type=float,
@@ -250,6 +249,13 @@ def run_pipeline():
 
     args = parser.parse_args()
 
+    # --- Validate argument combinations ---
+    if not args.location and not args.filter_remote_country and not args.filter_proximity_location:
+         parser.error("Ambiguous location: Please specify --location OR --filter-remote-country OR --filter-proximity-location for scraping.")
+    if args.filter_proximity_location and args.filter_remote_country:
+         parser.error("Conflicting filters: Cannot use --filter-proximity-location and --filter-remote-country simultaneously.")
+
+
     # --- Setup Logging Level ---
     log_level = logging.DEBUG if args.verbose else config.LOG_LEVEL
     logging.getLogger().setLevel(log_level)
@@ -257,22 +263,45 @@ def run_pipeline():
     config.ensure_output_dir()
 
     # --- Step 1: Scrape Jobs ---
-    scraper_sites = [site.strip().lower() for site in args.sites.split(',')] # Use the --sites arg
+    scraper_sites = [site.strip().lower() for site in args.sites.split(',')]
     proxy_list = [p.strip() for p in args.proxies.split(',')] if args.proxies else None
+
+    # --- Determine the location to use for the SCRAPE ---
+    scrape_location = None
+    if args.filter_remote_country:
+        # Use the country specified in the filter for the scrape
+        scrape_location = args.filter_remote_country.strip()
+        log.info(f"Using country '{scrape_location}' as primary scrape location (from --filter-remote-country).")
+    elif args.filter_proximity_location:
+         # Use proximity location for scrape if country filter isn't set
+         scrape_location = args.filter_proximity_location.strip()
+         log.info(f"Using proximity target '{scrape_location}' as primary scrape location.")
+    elif args.location:
+        # Use the explicitly provided --location if no advanced filters dictate location
+        scrape_location = args.location
+        log.info(f"Using provided --location '{scrape_location}' as primary scrape location.")
+    else:
+         # This case should be caught by argument validation above, but added for safety
+         log.error("Could not determine scrape location based on provided arguments.")
+         sys.exit(1)
+    # --- End location determination ---
 
     jobs_df = scrape_jobs_with_jobspy(
         search_terms=args.search,
-        location=args.location,
-        sites=scraper_sites,             # Use the --sites arg
-        results_wanted=args.results,     # Use the --results arg
-        hours_old=args.hours_old,         # Use the --hours-old arg
-        country_indeed=args.country_indeed,# Use the --country-indeed arg
-        proxies=proxy_list,              # Use the --proxies arg
-        offset=args.offset               # Use the --offset arg
+        location=scrape_location,         # Use the determined scrape_location
+        sites=scraper_sites,
+        results_wanted=args.results,
+        hours_old=args.hours_old,
+        country_indeed=args.country_indeed,
+        proxies=proxy_list,
+        offset=args.offset
     )
 
     if jobs_df is None or jobs_df.empty:
         log.warning("Scraping yielded no results. Pipeline cannot continue.")
+        # Ensure analysis output file is created even if empty
+        analysis_output_dir = os.path.dirname(args.analysis_output)
+        if analysis_output_dir: os.makedirs(analysis_output_dir, exist_ok=True)
         with open(args.analysis_output, 'w', encoding='utf-8') as f: json.dump([], f)
         log.info(f"Empty analysis results file created at {args.analysis_output}")
         sys.exit(0)
@@ -305,19 +334,19 @@ def run_pipeline():
     # Standard filters
     if args.min_salary is not None: filter_args_dict['salary_min'] = args.min_salary
     if args.max_salary is not None: filter_args_dict['salary_max'] = args.max_salary
-    if args.filter_work_models: filter_args_dict['work_models'] = [wm.strip().lower() for wm in args.filter_work_models.split(',')] # Ensure lower for consistency
-    if args.filter_job_types: filter_args_dict['job_types'] = [jt.strip().lower() for jt in args.filter_job_types.split(',')] # Ensure lower
+    if args.filter_work_models: filter_args_dict['work_models'] = [wm.strip().lower() for wm in args.filter_work_models.split(',')]
+    if args.filter_job_types: filter_args_dict['job_types'] = [jt.strip().lower() for jt in args.filter_job_types.split(',')]
 
-    # Advanced Location Filters
+    # Advanced Location Filters (Passed to filter function for post-processing)
     if args.filter_remote_country: filter_args_dict['filter_remote_country'] = args.filter_remote_country.strip()
     if args.filter_proximity_location:
         if args.filter_proximity_range is None:
-             parser.error("--filter-proximity-range is required when using --filter-proximity-location.") # Use parser.error for better exit
+             # This validation is now done earlier, but double-check doesn't hurt
+             parser.error("--filter-proximity-range is required when using --filter-proximity-location.")
         filter_args_dict['filter_proximity_location'] = args.filter_proximity_location.strip()
         filter_args_dict['filter_proximity_range'] = args.filter_proximity_range
         filter_args_dict['filter_proximity_models'] = [pm.strip().lower() for pm in args.filter_proximity_models.split(',')]
-    elif args.filter_proximity_range is not None:
-         parser.error("--filter-proximity-location is required when using --filter-proximity-range.")
+    # No need for elif here, logic handled during arg parsing and scrape location setting
 
     final_results_list_dict = apply_filters_sort_and_save(
         analyzed_results,
