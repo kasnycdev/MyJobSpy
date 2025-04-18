@@ -1,6 +1,5 @@
-You are an expert HR assistant tasked with extracting structured information from a resume text.
-Analyze the following resume text and extract the key information requested below.
-Output *only* a valid JSON object containing the extracted data, matching the specified structure. Do not include any introductory text, explanations, or markdown formatting like ```json.
+Analyze the following resume text carefully. Identify the key sections based on their headers (like 'PROFESSIONAL SUMMARY', 'MANAGEMENT SKILLS', 'TECHNICAL SKILLS', 'KEY ACHIEVEMENTS', 'WORK EXPERIENCE', 'EDUCATION') within the provided text. Extract the requested information, capturing the **full text** for specified sections.
+Output *only* a valid JSON object containing the extracted data, adhering strictly to the specified structure. Do not include any introductory text, explanations, markdown formatting (like ```json), or any text outside the JSON object itself.
 
 Resume Text:
 ---
@@ -9,25 +8,31 @@ Resume Text:
 
 JSON Structure to populate:
 {{
-  "summary": "string (Brief professional summary, max 3 sentences)",
-  "skills": ["string (List of key technical and soft skills mentioned, be comprehensive)"],
-  "": ["string (List of key technical and soft skills mentioned, be comprehensive)"],
+  "summary": "string (Extract the **full and complete text** found under the 'PROFESSIONAL SUMMARY' header.)",
+  "management_skills": ["string (Extract **all items listed** under the 'MANAGEMENT SKILLS' header into this list.)"],
+  "technical_skills": ["string (Extract **all items listed** under the 'TECHNICAL SKILLS' header into this list.)"],
+  "key_accomplishments": [
+      {{
+          "title": "string (Extract the title/heading of the accomplishment block found under 'KEY ACHIEVEMENTS', e.g., 'Data Platform Transformation')",
+          "description": "string (Extract the **full description text** associated with that accomplishment block.)"
+      }}
+  ],
   "experience": [
     {{
-      "title": "string (Job title)",
-      "company": "string (Company name)",
-      "years": "float or string (Approximate years in role, e.g., 2.5 or '3 years')",
-      "description": "string (Brief summary of responsibilities/achievements)"
+      "title": "string (Job title found under the 'WORK EXPERIENCE' header for a specific role)",
+      "company": "string (Company name found under the 'WORK EXPERIENCE' header for that role)",
+      "years": "float or string (Approximate years in the role. Calculate the duration based on the start and end dates provided for the role (e.g., '(08/2023 – 04/2024)'). Express as a float (e.g., 0.7) or descriptive string (e.g., '8 months').)",
+      "description": "string (**Extract the full text of all bullet points** found under that specific role title. Combine them into a single string, preserving formatting like newlines if possible within the string representation.)"
     }}
   ],
   "education": [
     {{
-      "degree": "string (Degree name)",
-      "institution": "string (Institution name)",
-      "years": "string (Years attended or graduation year)"
+      "degree": "string (Degree/program name found under the 'EDUCATION' header)",
+      "institution": "string (Institution name found under the 'EDUCATION' header)",
+      "years": "string (Years attended or graduation year range as listed under the 'EDUCATION' header, e.g., '1995-1997')"
     }}
   ],
-  "total_years_experience": "float or string (Estimate total years of relevant professional experience based on the text, provide a single number if possible)"
+  "total_years_experience": "float (Estimate the total years of relevant professional experience based *only* on the start date of the *earliest* dated job role listed under 'WORK EXPERIENCE' and the end date of the *most recent* dated job role listed. Provide a single floating-point number representing the total duration in years, e.g., 10.3)"
 }}
 
 Extracted JSON:
