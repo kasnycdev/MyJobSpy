@@ -108,3 +108,62 @@ Run the main analysis script from the project's root directory:
 
 ```bash
 python main_matcher.py --resume /path/to/your/resume.pdf --jobs /path/to/your/jobs.json --output output/results.json
+
+## Prerequisites
+
+*   ... (Keep Python, Git, Ollama, Ollama Model, Playwright Browsers) ...
+*   **geopy:** Used for advanced location filtering (`pip install geopy`).
+
+## Setup
+
+1.  ...
+2.  ...
+3.  **Install dependencies:**
+    ```bash
+    pip install -r requirements.txt
+    ```
+4.  **Install Playwright browsers:**
+    ```bash
+    playwright install
+    ```
+5.  **Configure (Optional):**
+    *   Edit `config.py`...
+    *   Set `GEOPY_USER_AGENT` environment variable or update the default in `filtering/filter.py` with your application name/email (required by Nominatim geocoding service). Example: `export GEOPY_USER_AGENT="MyApp/1.0 (contact@example.com)"`
+
+## Usage
+
+Run the main pipeline script: `python run_pipeline.py --search "..." --resume ... [OPTIONS]`
+
+**Common Optional Arguments:**
+
+*   ... (Keep search, resume, location, sites, results, hours-old, analysis-output) ...
+*   `--min-salary <amount>`: Filter results >= this annual salary.
+*   `--max-salary <amount>`: Filter results <= this annual salary.
+*   `--filter-work-models <models>`: Standard work model filter (e.g., "Remote,Hybrid"). Applied alongside other filters.
+*   `--filter-job-types <types>`: Filter by job type (e.g., "Full-time").
+*   `-v`, `--verbose`: Enable detailed DEBUG logging.
+
+**Advanced Location Filtering Arguments:**
+
+*   `--filter-remote-country <country>`: Keep only **Remote** jobs located within the specified country (e.g., `"USA"`, `"Canada"`). Uses geocoding.
+*   `--filter-proximity-location <location>`: Reference location (e.g., `"Boston, MA"`) for proximity filtering. **Requires `--filter-proximity-range`**.
+*   `--filter-proximity-range <miles>`: Maximum distance in **miles** from the reference location (e.g., `50`).
+*   `--filter-proximity-models <models>`: Work models to include in proximity search (default: `"Hybrid,On-site"`).
+
+**Example with Advanced Filters:**
+
+```bash
+# Find remote jobs in Canada paying over $100k
+python run_pipeline.py \
+    --search "Software Engineer" \
+    --resume my_resume.pdf \
+    --filter-remote-country "Canada" \
+    --min-salary 100000
+
+# Find Hybrid or On-site jobs within 30 miles of "Austin, TX"
+python run_pipeline.py \
+    --search "Data Analyst" \
+    --resume my_resume.pdf \
+    --filter-proximity-location "Austin, TX" \
+    --filter-proximity-range 30 \
+    --filter-proximity-models "Hybrid,On-site"
