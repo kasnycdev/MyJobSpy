@@ -9,6 +9,7 @@ from typing import List, Dict, Any, Optional
 import pandas as pd
 
 # ... (other imports: jobspy, main_matcher functions, config, rich) ...
+import config # Central configuration
 from rich.console import Console
 from rich.logging import RichHandler
 # ...
