@@ -38,25 +38,60 @@ class ResumeAnalyzer:
         """Checks Ollama connection and ensures the configured model is available."""
         try:
             log.info(f"Checking Ollama connection at {config.OLLAMA_BASE_URL}...")
-            self.client.list()
-            log.info("Ollama connection successful.")
+            # First, just test basic connection without assuming list structure
+            self.client.ps() # Use 'ps' or another simple command to check connection status
+            log.info("Ollama connection successful (basic check passed).")
 
-            local_models = [m['name'] for m in self.client.list()['models']]
+            # Now, get the list of models and inspect carefully
+            log.info("Fetching list of local Ollama models...")
+            ollama_list_response = self.client.list()
+            log.debug(f"Raw Ollama list response: {ollama_list_response}") # Log the full response for debugging
+
+            # Safely extract the list of model dictionaries
+            models_data = ollama_list_response.get('models', []) # Default to empty list if 'models' key missing
+            if not isinstance(models_data, list):
+                log.error(f"Ollama list response 'models' key did not contain a list. Found type: {type(models_data)}")
+                models_data = [] # Treat invalid data as empty list
+
+            # Safely extract model names using .get() and filter out None/empty results
+            local_models = []
+            for m in models_data:
+                if isinstance(m, dict):
+                    model_name = m.get('name') # Use .get() for safe access
+                    if model_name: # Ensure name is not None or empty
+                        local_models.append(model_name)
+                else:
+                    log.warning(f"Found non-dictionary item in Ollama models list: {m}")
+
+            log.info(f"Successfully parsed local models: {local_models}")
+
+            # Check if the desired model exists in the extracted list
             if config.OLLAMA_MODEL not in local_models:
-                log.warning(f"Model '{config.OLLAMA_MODEL}' not found locally.")
+                log.warning(f"Model '{config.OLLAMA_MODEL}' not found in parsed local models list: {local_models}")
                 log.info(f"Attempting to pull model '{config.OLLAMA_MODEL}'. This may take time...")
                 try:
                     self._pull_model_with_progress(config.OLLAMA_MODEL)
+                    # Verify it exists after pulling
+                    updated_list = self.client.list().get('models', [])
+                    updated_names = [m.get('name') for m in updated_list if isinstance(m, dict) and m.get('name')]
+                    if config.OLLAMA_MODEL not in updated_names:
+                         log.error(f"Model '{config.OLLAMA_MODEL}' still not found after attempting pull.")
+                         raise ConnectionError(f"Ollama model pull seemed complete but model '{config.OLLAMA_MODEL}' not listed.")
+
                 except Exception as pull_err:
-                    log.error(f"Failed to pull Ollama model '{config.OLLAMA_MODEL}': {pull_err}")
-                    raise ConnectionError(f"Ollama model unavailable and pull failed.") from pull_err
+                    log.error(f"Failed to pull Ollama model '{config.OLLAMA_MODEL}': {pull_err}", exc_info=True)
+                    # Raise a specific error indicating the model is unavailable
+                    raise ConnectionError(f"Required Ollama model '{config.OLLAMA_MODEL}' unavailable and pull failed.") from pull_err
             else:
-                log.info(f"Using Ollama model: {config.OLLAMA_MODEL}")
+                log.info(f"Using configured Ollama model: {config.OLLAMA_MODEL}")
 
+        except (ollama.ResponseError, ConnectionError, TimeoutError) as conn_e:
+             log.error(f"Failed to connect or communicate with Ollama at {config.OLLAMA_BASE_URL}. Is Ollama running? Error: {conn_e}", exc_info=True)
+             raise ConnectionError(f"Ollama connection/setup failed: {conn_e}") from conn_e
         except Exception as e:
-            log.error(f"Failed to connect or verify model with Ollama at {config.OLLAMA_BASE_URL}. Error: {e}")
-            raise ConnectionError(f"Ollama connection/setup failed: {e}") from e
-
+            log.error(f"An unexpected error occurred during Ollama connection/setup: {e}", exc_info=True)
+            # Wrap unexpected errors for clarity
+            raise ConnectionError(f"Ollama connection/setup failed unexpectedly: {e}") from e
     def _pull_model_with_progress(self, model_name: str):
         """Pulls an Ollama model, showing progress."""
         current_digest = ""
