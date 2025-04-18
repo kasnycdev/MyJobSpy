@@ -73,7 +73,7 @@ def scrape_jobs_with_jobspy(
             proxies=proxies,
             offset=offset,
             verbose=1,
-            linkedin_fetch_description: True,
+            linkedin_fetch_description=True,
             description_format="markdown"
         )
 
