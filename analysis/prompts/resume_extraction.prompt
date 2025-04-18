@@ -11,6 +11,7 @@ JSON Structure to populate:
 {{
   "summary": "string (Brief professional summary, max 3 sentences)",
   "skills": ["string (List of key technical and soft skills mentioned, be comprehensive)"],
+  "": ["string (List of key technical and soft skills mentioned, be comprehensive)"],
   "experience": [
     {{
       "title": "string (Job title)",

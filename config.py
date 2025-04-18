@@ -9,7 +9,7 @@ DEFAULT_ANALYSIS_JSON = os.path.join(DEFAULT_OUTPUT_DIR, "analyzed_jobs.json")
 
 # --- Ollama Configuration ---
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3:instruct") # Or "mistral:instruct", "phi3:instruct"
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "mistral:instruct") # Or "mistral:instruct", "phi3:instruct", "llama3:instruct"
 OLLAMA_REQUEST_TIMEOUT = int(os.getenv("OLLAMA_REQUEST_TIMEOUT", 600)) # Increased timeout
 OLLAMA_MAX_RETRIES = 3
 OLLAMA_RETRY_DELAY = 5 # Base delay in seconds for exponential backoff
@@ -25,9 +25,9 @@ MAX_PROMPT_CHARS = int(os.getenv("MAX_PROMPT_CHARS", 24000)) # ~8k tokens for Ll
 # --- JobSpy Scraping Defaults ---
 # Sites supported by jobspy (check jobspy documentation for the latest list)
 DEFAULT_SCRAPE_SITES = ["linkedin", "indeed", "zip_recruiter", "glassdoor"]
-DEFAULT_RESULTS_LIMIT = 20
+DEFAULT_RESULTS_LIMIT = 100
 DEFAULT_HOURS_OLD = 72 # 3 days
-DEFAULT_COUNTRY_INDEED = "usa"
+DEFAULT_COUNTRY_INDEED = "United States"
 
 # --- Logging Configuration ---
 LOG_LEVEL = logging.INFO # Default level
