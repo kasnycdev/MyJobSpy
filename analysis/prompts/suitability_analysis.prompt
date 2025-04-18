@@ -1,32 +1,48 @@
-You are an expert HR analyst comparing a candidate's resume against a job description.
-Analyze the provided structured resume data and the job description text.
-Provide a detailed suitability analysis, focusing on skills, experience, qualifications, salary (if available), and benefits (if mentioned).
+Your goal is to provide a detailed suitability analysis and then structure the output as a JSON object containing BOTH the original job data AND your analysis results.
+
+Analyze the provided structured resume data (Resume Data JSON) and the job data dictionary (Job Data Dictionary). Focus on comparing the candidate's skills (management & technical), experience (years, roles, accomplishments from resume), education, and key achievements against the requirements mentioned in the job's 'title', 'description', 'skills' list (if provided), and any other relevant fields in the job data.
 
 Candidate Resume Data (JSON):
 ---
 {resume_data_json}
 ---
 
-Job Mandate / Description (JSON Object - focus on 'description', 'title', 'required_skills', 'qualifications', 'salary_text', 'benefits_text' fields if they exist, otherwise use the full object):
+Job Data (Dictionary - Use all fields for context, focus analysis on 'title', 'description', 'skills', location', etc.):
 ---
 {job_data_json}
 ---
 
-Based on the comparison, provide a suitability score from 0 to 100, where 100 is a perfect match.
-Also provide a justification and fill in the other fields as accurately as possible. Consider the requirements mentioned in the job description as the primary benchmark.
+Based on this detailed comparison, generate a JSON output containing two top-level keys:
+1.  `original_job_data`: This key's value should be the **complete, unmodified JSON object** that was provided as the 'Job Data Dictionary' input above.
+2.  `analysis`: This key's value should be a JSON object containing your analysis results, structured according to the fields defined below. Calculate a suitability score (0-100) reflecting how well the candidate's profile matches the job's requirements.
 
-Output *only* a valid JSON object matching the structure below. Do not include any introductory text, explanations, or markdown formatting like ```json.
+Output *only* the final, complete JSON object containing these two keys (`original_job_data` and `analysis`). Do not include any introductory text, explanations, or markdown formatting like ```json outside of the JSON structure itself.
 
 JSON Structure to populate:
 {{
-  "suitability_score": "integer (0-100, based on overall fit with required qualifications)",
-  "justification": "string (Detailed explanation for the score, highlighting strengths and weaknesses regarding skills, experience, qualifications. Mention specific keyword matches or misses.)",
-  "skill_match": "boolean (Do the candidate's skills strongly align with the *required* skills mentioned in the job? Consider keywords and context.)",
-  "experience_match": "boolean (Does the candidate's total years and type of experience align with the job requirements? Consider both total years and specific role experience mentioned.)",
-  "qualification_match": "boolean (Does the candidate meet the essential qualifications like degrees or certifications mentioned?)",
-  "salary_alignment": "string (Assess potential salary fit based on candidate's experience level vs. job's salary range/text. Options: 'Likely Fit', 'Potentially Below Range', 'Potentially Above Range', 'Insufficient Data')",
-  "benefit_alignment": "string (Briefly note any alignment or mention of key benefits if discussed in both resume context and job. E.g., 'Mentions Health/Retirement', 'Standard Benefits Likely', 'Insufficient Data')",
-  "missing_keywords": ["string (List a few key *required* skills or qualifications from the job description that seem absent or weak in the resume)"]
+  "original_job_data": {{
+      // The entire content of the '{job_data_json}' input dictionary goes here.
+      // Preserve all original fields and their values exactly.
+      "title": "...",
+      "company": "...",
+      "location": "...",
+      "description": "...",
+      "skills": ["...", "..."],
+      "url": "...",
+      "employment_type": "...",
+      "salary_text": "...",
+      // etc. - ALL original fields from the input job data.
+  }},
+  "analysis": {{
+    "suitability_score": "integer (0-100, based on overall fit with required qualifications, skills, and experience mentioned in the job posting, considering the candidate's resume data)",
+    "justification": "string (Detailed explanation for the score. Explicitly compare the candidate's experience duration, specific roles, technical skills, management skills, and key accomplishments against the job requirements. Highlight key strengths and specific gaps for this role based on the job description.)",
+    "skill_match": "boolean (Considering both management and technical skills from the resume, do they strongly align with the skills explicitly required or heavily implied in the job description?)",
+    "experience_match": "boolean (Does the candidate's total years of experience AND the nature of their roles/accomplishments (from resume 'experience' and 'key_accomplishments') align well with the experience level and responsibilities described in the job posting?)",
+    "qualification_match": "boolean (Does the candidate meet the essential educational or certification qualifications mentioned in the job posting, based on the resume's 'education' section?)",
+    "salary_alignment": "string (Assess potential salary fit based on the job's salary info [if present] vs. candidate's profile [experience level, roles]. Options: 'Likely Fit', 'Potentially Below Range', 'Potentially Above Range', 'Insufficient Job Data')",
+    "benefit_alignment": "string (Assess benefit alignment based on job's 'benefits_text' [if present]. Options: 'Mentions Standard Benefits', 'Specific Benefit Alignment', 'Insufficient Data')",
+    "missing_keywords": ["string (List a few specific, important keywords [skills, technologies, qualifications, concepts] mentioned as required in the job description that seem absent or underrepresented in the candidate's resume.)"]
+  }}
 }}
 
 Analysis JSON:

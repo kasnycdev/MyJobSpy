@@ -5,7 +5,8 @@ import time
 import os
 from typing import Dict, Optional, Any
 
-from .models import ResumeData, JobAnalysisResult
+# Models now expect the nested structure implicitly via the prompt design
+from .models import ResumeData, JobAnalysisResult, AnalyzedJob
 import config # Import our central configuration
 
 # Setup logger
@@ -55,10 +56,9 @@ class ResumeAnalyzer:
             # Extract model names by accessing the correct attribute (likely .model)
             local_models = []
             for m in models_data:
-                # Check if the item has a 'model' attribute (safer than checking type)
                 if hasattr(m, 'model') and isinstance(m.model, str) and m.model:
                     local_models.append(m.model)
-                elif isinstance(m, dict) and m.get('name'): # Fallback for older versions? Unlikely needed now.
+                elif isinstance(m, dict) and m.get('name'):
                      log.warning(f"Found dictionary item in model list (unexpected): {m}. Using 'name' key.")
                      local_models.append(m.get('name'))
                 else:
@@ -66,15 +66,12 @@ class ResumeAnalyzer:
 
             log.info(f"Successfully parsed local models: {local_models}")
 
-            # Check if the desired model exists in the extracted list
             if config.OLLAMA_MODEL not in local_models:
                 log.warning(f"Model '{config.OLLAMA_MODEL}' not found in parsed local models list: {local_models}")
                 log.info(f"Attempting to pull model '{config.OLLAMA_MODEL}'. This may take time...")
                 try:
-                    # --- Pulling logic remains the same ---
                     self._pull_model_with_progress(config.OLLAMA_MODEL)
 
-                    # --- Re-verify after pulling ---
                     log.info("Re-fetching model list after pull...")
                     updated_list_response = self.client.list()
                     updated_models_data = updated_list_response.get('models', [])
@@ -88,7 +85,6 @@ class ResumeAnalyzer:
                     log.debug(f"Model list after pull: {updated_names}")
                     if config.OLLAMA_MODEL not in updated_names:
                          log.error(f"Model '{config.OLLAMA_MODEL}' still not found after attempting pull and re-checking list.")
-                         # Maybe Ollama needs a moment? Add a small delay and final check?
                          time.sleep(2)
                          final_list_response = self.client.list()
                          final_models_data = final_list_response.get('models', [])
@@ -114,6 +110,7 @@ class ResumeAnalyzer:
 
     def _pull_model_with_progress(self, model_name: str):
         """Pulls an Ollama model, showing progress."""
+        # --- This method remains unchanged ---
         current_digest = ""
         status = ""
         try:
@@ -124,37 +121,35 @@ class ResumeAnalyzer:
                 if digest:
                     current_digest = digest
                     status = progress.get('status', '')
-                    print(f"Pulling {model_name}: {status}", end='\r')
+                    # Avoid printing empty status lines constantly
+                    if status: print(f"Pulling {model_name}: {status}", end='\r')
                 else:
                     status = progress.get('status', '')
-                    print(f"Pulling {model_name}: {status}") # Print other messages like downloading, verifying
+                    # Print only meaningful status updates
+                    if status and 'pulling' not in status.lower(): # Avoid redundant pulling messages
+                        print(f"Pulling {model_name}: {status}")
 
                 if progress.get('error'):
                     raise Exception(f"Pull error: {progress['error']}")
 
-                # Check completion status explicitly
                 if 'status' in progress and 'success' in progress['status'].lower():
-                    # Sometimes success message doesn't have digest, handle here
-                    print() # Ensure newline after final status
+                    print()
                     log.info(f"Successfully pulled model {model_name}")
                     break
         except Exception as e:
-             print() # Ensure newline after potential error
+             print()
              log.error(f"Error during model pull: {e}")
              raise
         finally:
-             print() # Final newline ensures clean state
+             print()
 
 
     def _call_ollama(self, prompt: str) -> Optional[Dict[str, Any]]:
-        """
-        Calls the Ollama API with retry logic and expects JSON output.
-        Handles potential JSON parsing errors and retries.
-        """
+        """Calls Ollama API with retry logic, expects JSON output."""
+        # --- This method remains unchanged ---
         log.debug(f"Sending request to Ollama model {config.OLLAMA_MODEL}. Prompt length: {len(prompt)} chars.")
         if len(prompt) > config.MAX_PROMPT_CHARS:
              log.warning(f"Prompt length ({len(prompt)} chars) exceeds threshold ({config.MAX_PROMPT_CHARS}). May risk context window issues.")
-             # Consider truncating prompt here if necessary
 
         last_exception = None
         for attempt in range(config.OLLAMA_MAX_RETRIES):
@@ -162,14 +157,13 @@ class ResumeAnalyzer:
                 response = self.client.chat(
                     model=config.OLLAMA_MODEL,
                     messages=[{'role': 'user', 'content': prompt}],
-                    format='json', # Request JSON output format
-                    options={'temperature': 0.1} # Lower temperature for more deterministic JSON
+                    format='json',
+                    options={'temperature': 0.1}
                 )
                 content = response['message']['content']
                 log.debug(f"Ollama raw response (first 500 chars): {content[:500]}...")
 
                 try:
-                    # Handle potential markdown code blocks around JSON
                     content_strip = content.strip()
                     if content_strip.startswith("```json"):
                         content_strip = content_strip[7:]
@@ -187,7 +181,6 @@ class ResumeAnalyzer:
                     log.warning(f"Failed to decode JSON response from Ollama (Attempt {attempt + 1}): {json_err}")
                     log.debug(f"Problematic Ollama response content: {content}")
                     last_exception = json_err
-                    # Retry on JSON errors as LLM might fix formatting
 
             except (ollama.ResponseError, TimeoutError, ConnectionError) as conn_err:
                 log.warning(f"Ollama API communication error (Attempt {attempt + 1}): {conn_err}")
@@ -195,7 +188,6 @@ class ResumeAnalyzer:
             except Exception as e:
                 log.error(f"Unexpected error calling Ollama API (Attempt {attempt + 1}): {e}", exc_info=True)
                 last_exception = e
-                # Potentially stop retrying on unexpected errors? For now, continue.
 
             if attempt < config.OLLAMA_MAX_RETRIES - 1:
                 delay = config.OLLAMA_RETRY_DELAY * (2 ** attempt)
@@ -205,11 +197,11 @@ class ResumeAnalyzer:
                  log.error(f"Ollama call failed after {config.OLLAMA_MAX_RETRIES} attempts.")
                  if last_exception:
                      log.error(f"Last error encountered: {last_exception}")
-
-        return None # Failed after all retries
+        return None
 
     def extract_resume_data(self, resume_text: str) -> Optional[ResumeData]:
         """Extracts structured data from resume text using the LLM."""
+        # --- This method remains unchanged ---
         if not resume_text or not resume_text.strip():
             log.warning("Resume text is empty, cannot extract data.")
             return None
@@ -220,12 +212,17 @@ class ResumeAnalyzer:
 
         if extracted_json:
             try:
-                resume_data = ResumeData(**extracted_json)
-                log.info("Successfully parsed extracted resume data.")
-                log.debug(f"Extracted skills: {resume_data.skills}")
-                log.debug(f"Extracted experience years: {resume_data.total_years_experience}")
-                return resume_data
-            except Exception as e: # Catches Pydantic validation errors
+                # Ensure extracted_json is a dict before passing to Pydantic
+                if isinstance(extracted_json, dict):
+                     resume_data = ResumeData(**extracted_json)
+                     log.info("Successfully parsed extracted resume data.")
+                     log.debug(f"Extracted skills: T:{len(resume_data.technical_skills)} M:{len(resume_data.management_skills)}")
+                     log.debug(f"Extracted experience years: {resume_data.total_years_experience}")
+                     return resume_data
+                else:
+                     log.error(f"LLM response for resume extraction was not a dictionary: {type(extracted_json)}")
+                     return None
+            except Exception as e:
                 log.error(f"Failed to validate extracted resume data: {e}", exc_info=True)
                 log.error(f"Invalid JSON received for resume: {extracted_json}")
                 return None
@@ -233,33 +230,25 @@ class ResumeAnalyzer:
             log.error("Failed to get valid JSON response from LLM for resume extraction.")
             return None
 
+    # --- analyze_suitability: MODIFIED ---
     def analyze_suitability(self, resume_data: ResumeData, job_data: Dict[str, Any]) -> Optional[JobAnalysisResult]:
-        """Analyzes job suitability against resume data using the LLM."""
+        """
+        Analyzes job suitability against resume data using the LLM.
+        Expects LLM to return a nested JSON with 'original_job_data' and 'analysis' keys.
+        Returns only the validated JobAnalysisResult object or None.
+        """
         if not resume_data:
              log.warning("Missing structured resume data for suitability analysis.")
              return None
-        if not job_data or not job_data.get("description"): # Need at least a description
+        if not job_data or not job_data.get("description"):
              log.warning(f"Missing job data or description for job: {job_data.get('title', 'N/A')}. Skipping analysis.")
              return None
 
         try:
+            # Prepare data for the prompt (remains the same)
             resume_data_json = resume_data.model_dump_json(indent=2)
-            # Create a focused job context for the prompt
-            job_context = {
-                "title": job_data.get("title"),
-                "company": job_data.get("company"),
-                "location": job_data.get("location"),
-                "description": job_data.get("description"),
-                "required_skills": job_data.get("skills"), # Assuming jobspy provides 'skills'
-                "qualifications": job_data.get("qualifications"), # May not always be present
-                "salary_text": job_data.get("salary"), # Assuming jobspy provides 'salary' field
-                "job_type": job_data.get("job_type") or job_data.get("employment_type"),
-                "work_model": job_data.get("work_model"), # May need inference
-                "benefits_text": job_data.get("benefits") # Assuming jobspy provides 'benefits'
-            }
-            # Remove keys with None values to keep prompt cleaner
-            job_context_filtered = {k: v for k, v in job_context.items() if v is not None and v != ''}
-            job_data_json = json.dumps(job_context_filtered, indent=2)
+            # Pass the full job_data dictionary as JSON for the {job_data_json} placeholder
+            job_data_json = json.dumps(job_data, indent=2, default=str) # Use default=str for safety
 
             prompt = self.suitability_prompt_template.format(
                 resume_data_json=resume_data_json,
@@ -270,17 +259,29 @@ class ResumeAnalyzer:
             return None
 
         log.info(f"Requesting suitability analysis from LLM for job: {job_data.get('title', 'N/A')}")
-        analysis_json = self._call_ollama(prompt)
+        # Call Ollama - expecting the combined JSON structure now
+        combined_json_response = self._call_ollama(prompt)
 
-        if analysis_json:
-            try:
-                analysis_result = JobAnalysisResult(**analysis_json)
-                log.info(f"Suitability score for '{job_data.get('title', 'N/A')}': {analysis_result.suitability_score}%")
-                return analysis_result
-            except Exception as e: # Catches Pydantic validation errors
-                log.error(f"Failed to validate LLM analysis result: {e}", exc_info=True)
-                log.error(f"Invalid JSON received for analysis: {analysis_json}")
-                return None
-        else:
-            log.error("Failed to get valid JSON response from LLM for suitability analysis.")
+        if not combined_json_response or not isinstance(combined_json_response, dict):
+            log.error("Failed to get valid JSON dictionary response from LLM for suitability analysis.")
             return None
+
+        # --- NEW: Extract the 'analysis' part ---
+        analysis_data = combined_json_response.get("analysis")
+
+        if not analysis_data or not isinstance(analysis_data, dict):
+            log.error("LLM response JSON did not contain a valid 'analysis' dictionary.")
+            log.debug(f"Full LLM response received: {combined_json_response}")
+            return None
+
+        # --- Validate the extracted 'analysis' data ---
+        try:
+            analysis_result = JobAnalysisResult(**analysis_data)
+            log.info(f"Suitability score for '{job_data.get('title', 'N/A')}': {analysis_result.suitability_score}%")
+            # Return *only* the analysis part, as before
+            return analysis_result
+        except Exception as e: # Catches Pydantic validation errors
+            log.error(f"Failed to validate LLM analysis result: {e}", exc_info=True)
+            log.error(f"Invalid 'analysis' JSON structure received: {analysis_data}")
+            return None
+        # --- End of Changes ---
