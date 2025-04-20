@@ -9,8 +9,8 @@ DEFAULT_ANALYSIS_JSON = os.path.join(DEFAULT_OUTPUT_DIR, "analyzed_jobs.json")
 
 # --- Ollama Configuration ---
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3:instruct") # Or "mistral:instruct", "phi3:instruct", "llama3:instruct", "openthinker", "deepseek-r1:14b", "llama3.1"
-OLLAMA_REQUEST_TIMEOUT = int(os.getenv("OLLAMA_REQUEST_TIMEOUT", 300)) # Increased timeout
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "deepseek-r1:14b") # Or "mistral:instruct", "phi3:instruct", "llama3:instruct", "openthinker", "deepseek-r1:14b", "llama3.1"
+OLLAMA_REQUEST_TIMEOUT = int(os.getenv("OLLAMA_REQUEST_TIMEOUT", 600)) # Increased timeout
 OLLAMA_MAX_RETRIES = 3
 OLLAMA_RETRY_DELAY = 5 # Base delay in seconds for exponential backoff
 
