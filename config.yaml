@@ -10,7 +10,7 @@ ollama:
   base_url: "http://localhost:11434" # Can be overridden by OLLAMA_BASE_URL env var
 
   # Default LLM model to use for analysis (MUST be pulled in Ollama)
-  model: "llama3:instruct"          # Can be overridden by OLLAMA_MODEL env var
+  model: "deepseek-r1:14b"          # Can be overridden by OLLAMA_MODEL env var
 
   # Timeout in seconds for individual requests to the Ollama API
   request_timeout: 450
@@ -25,7 +25,7 @@ ollama:
   # (Resume JSON + Job JSON + Prompt Template Text) sent for SUITABILITY analysis.
   # Helps prevent context window overflows or excessively long processing times.
   # Tune based on your chosen model's context window and system memory.
-  max_prompt_chars: 100s000
+  max_prompt_chars: 100000
 
 # --- Prompt File Locations ---
 # Specifies where the LLM prompt template files are located, relative to the project root.
@@ -41,10 +41,10 @@ scraping:
   # Default sites to scrape if --sites argument is omitted.
   # Check JobSpy documentation for currently supported/reliable sites.
   # Example: ["linkedin", "indeed", "zip_recruiter"]
-  default_sites: ["linkedin", "indeed"]
+  default_sites: ["linkedin", "glassdoor", "ziprecruiter", "indeed"]
 
   # Default approximate number of job results to aim for *per site*.
-  default_results_limit: 25
+  default_results_limit: 100
 
   # Default maximum age of jobs in hours (e.g., 72 for last 3 days).
   # Set to 0 to disable this filter during scraping.
