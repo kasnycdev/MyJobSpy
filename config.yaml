@@ -13,7 +13,7 @@ ollama:
   model: "deepseek-r1:14b"          # Can be overridden by OLLAMA_MODEL env var
 
   # Timeout in seconds for individual requests to the Ollama API
-  request_timeout: 450
+  request_timeout: 600
 
   # Maximum number of retries if an Ollama API call fails (e.g., timeout, network error)
   max_retries: 2
