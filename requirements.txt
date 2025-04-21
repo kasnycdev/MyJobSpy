@@ -1,104 +1,28 @@
-# requirements.txt (Example - Your versions will differ!)
-aiohttp==3.9.5
-aiosignal==1.3.1
-annotated-types==0.7.0
-anyio==4.4.0
-appdirs==1.4.4
-attrs==23.2.0
-beautifulsoup4==4.12.3
-certifi==2024.6.2
-cffi==1.16.0
-charset-normalizer==3.3.2
-click==8.1.7
-colorama==0.4.6
-contourpy==1.2.1
-cryptography==42.0.8
-cycler==0.12.1
-exceptiongroup==1.2.1
-fake-useragent==1.5.1
-filelock==3.15.1
-fonttools==4.53.0
-frozenlist==1.4.1
-fsspec==2024.6.0
-h11==0.14.0
-httpcore==1.0.5
-httpx==0.27.0
-idna==3.7
-python-jobspy==1.1.80 # Or the specific version you have
-jsonlines==4.0.0
-kiwisolver==1.4.5
-lxml==5.2.2
-markdown-it-py==3.0.0
-matplotlib==3.9.0
-mdurl==0.1.2
-multidict==6.0.5
-#numpy==1.26.4
-numpy
-ollama==0.2.1 # Or the specific version
-openpyxl==3.1.4 # If using Excel output
-packaging==24.1
-pandas==2.2.2
-pdfminer.six==20231228 # If using pdfminer
-pillow==10.3.0
-pillow==10.3.0
-platformdirs==4.2.2
-ply==3.11
-psutil==5.9.8
-pycparser==2.22
-pydantic==2.7.4
-pydantic_core==2.18.4
-Pygments==2.18.0
-PyMuPDF==1.24.5 # If using fitz
-PySocks==1.7.1
-python-dateutil==2.9.0.post0
-python-dotenv==1.0.1
-pytz==2024.1
-PyYAML==6.0.1
-requests==2.32.3
-rich==13.7.1
-selenium==4.21.0
-six==1.16.0
-sniffio==1.3.1
-soupsieve==2.5
-tqdm==4.66.4
-trio==0.25.1
-trio-websocket==0.11.1
-typing_extensions==4.12.2
-urllib3==2.2.1
-webdriver-manager==4.0.1
-wsproto==1.2.0
-yarl==1.9.4
 # requirements.txt
 
 # === Core Functionality ===
 
 # Resume/Document Parsing
-python-docx >= 1.1.0  # For reading .docx files
-PyPDF2 >= 3.0.0       # For reading .pdf files
+python-docx >= 1.1.0
+PyPDF2 >= 3.0.0
 
 # GenAI Integration (Local LLM via Ollama)
-ollama >= 0.2.0       # Ollama client library
-pydantic >= 2.5.0     # For data validation and modeling (used by analysis/models.py)
+ollama >= 0.2.0
+pydantic >= 2.5.0
 
 # Job Scraping (using JobSpy library)
-jobspy >= 0.29.0      # Main scraping library (pulls pandas, playwright, beautifulsoup4, httpx etc.)
+jobspy >= 0.29.0 # Ensures necessary sub-dependencies are pulled
 
 # Geocoding for Advanced Location Filtering
-geopy >= 2.4.0        # For geocoding addresses/locations
+geopy >= 2.4.0
 
 # UX / Console Output
-rich >= 13.0.0        # For formatted console output (logging, tables, progress)
+rich >= 13.0.0
 
 
-# === Important Transitive Dependencies (Usually installed by above, listed for clarity/pinning if needed) ===
+# === Important Transitive Dependencies (Usually installed by above) ===
+# Listing pandas explicitly is good practice as it's heavily used after scraping
+pandas >= 2.0.0
 
-# Pulled by JobSpy (and often others)
-pandas >= 2.0.0       # Data manipulation (required by JobSpy for DataFrames)
-playwright >= 1.40    # Browser automation (required by JobSpy) - Ensure browsers are installed via 'playwright install'
-beautifulsoup4        # HTML parsing (used by JobSpy)
-httpx                 # HTTP client (used by ollama, jobspy, potentially geopy)
-requests              # HTTP client (might be used by dependencies)
-
-# Note: Specific versions might need adjustment later if deeper dependency conflicts arise.
-#       It's often good practice to run `pip freeze > requirements.txt` after a successful
-#       install to capture the exact working versions, but the above provides flexible minimums.
+# Note: playwright is installed via 'playwright install' command, not pip usually.
+# Note: beautifulsoup4, httpx, requests etc. are pulled by jobspy/ollama/geopy
