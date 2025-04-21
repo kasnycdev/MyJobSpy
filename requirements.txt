@@ -68,3 +68,37 @@ urllib3==2.2.1
 webdriver-manager==4.0.1
 wsproto==1.2.0
 yarl==1.9.4
+# requirements.txt
+
+# === Core Functionality ===
+
+# Resume/Document Parsing
+python-docx >= 1.1.0  # For reading .docx files
+PyPDF2 >= 3.0.0       # For reading .pdf files
+
+# GenAI Integration (Local LLM via Ollama)
+ollama >= 0.2.0       # Ollama client library
+pydantic >= 2.5.0     # For data validation and modeling (used by analysis/models.py)
+
+# Job Scraping (using JobSpy library)
+jobspy >= 0.29.0      # Main scraping library (pulls pandas, playwright, beautifulsoup4, httpx etc.)
+
+# Geocoding for Advanced Location Filtering
+geopy >= 2.4.0        # For geocoding addresses/locations
+
+# UX / Console Output
+rich >= 13.0.0        # For formatted console output (logging, tables, progress)
+
+
+# === Important Transitive Dependencies (Usually installed by above, listed for clarity/pinning if needed) ===
+
+# Pulled by JobSpy (and often others)
+pandas >= 2.0.0       # Data manipulation (required by JobSpy for DataFrames)
+playwright >= 1.40    # Browser automation (required by JobSpy) - Ensure browsers are installed via 'playwright install'
+beautifulsoup4        # HTML parsing (used by JobSpy)
+httpx                 # HTTP client (used by ollama, jobspy, potentially geopy)
+requests              # HTTP client (might be used by dependencies)
+
+# Note: Specific versions might need adjustment later if deeper dependency conflicts arise.
+#       It's often good practice to run `pip freeze > requirements.txt` after a successful
+#       install to capture the exact working versions, but the above provides flexible minimums.
