@@ -3,8 +3,11 @@ import ollama
 import json
 import logging
 from typing import Dict, Any, Optional, List
-from models import JobAnalysisResult, KeywordAnalysis, MatchDetails # Import updated Pydantic models
+# --- MODIFIED IMPORT ---
+from ..models.models import JobAnalysisResult, KeywordAnalysis, MatchDetails # Import updated Pydantic models
+# --- END MODIFIED IMPORT ---
 from datetime import datetime
+import os # Added os import for path check
 
 logger = logging.getLogger(__name__)
 
@@ -34,11 +37,6 @@ class JobAnalyzer:
         try:
             self.client.list() # Simple command to test connection
             logger.info("Ollama connection successful (basic check passed).")
-            # You might want a more robust check, like ensuring the specific model exists
-            # models = self.client.list().get('models', [])
-            # if not any(m['name'] == self.model_name for m in models):
-            #     logger.error(f"Model '{self.model_name}' not found locally in Ollama.")
-            #     return False
             return True
         except Exception as e:
             logger.error(f"Ollama connection failed: {e}", exc_info=True)
@@ -58,12 +56,11 @@ class JobAnalyzer:
             response = self.client.chat(
                 model=self.model_name,
                 messages=[{'role': 'user', 'content': prompt}],
-                format='json' # Request JSON output directly if model supports it
+                format='json'
             )
             content = response['message']['content']
             logger.debug(f"Ollama raw response (first 500 chars): {content[:500]} ...")
 
-            # Attempt to parse the JSON content
             extracted_data = json.loads(content)
             logger.debug("Successfully parsed JSON response from Ollama.")
             logger.info("Successfully parsed extracted resume data.")
@@ -71,7 +68,8 @@ class JobAnalyzer:
 
         except json.JSONDecodeError as e:
             logger.error(f"Failed to decode JSON response from Ollama for resume extraction: {e}")
-            logger.error(f"LLM response content was: {content}") # Log the faulty content
+            content = content if 'content' in locals() else '<Response content not captured>'
+            logger.error(f"LLM response content was: {content}")
             return None
         except Exception as e:
             logger.error(f"Error during resume data extraction: {e}", exc_info=True)
@@ -86,23 +84,19 @@ class JobAnalyzer:
             logger.error("Job suitability prompt template is missing.")
             return None
 
-        # Prepare input JSON strings for the prompt
         try:
             structured_resume_json = json.dumps(structured_resume, indent=2)
-            job_details_json = json.dumps(job_details, indent=2, default=str) # Use default=str for dates etc.
+            job_details_json = json.dumps(job_details, indent=2, default=str)
         except Exception as json_err:
             logger.error(f"Failed to serialize input data to JSON for LLM prompt: {json_err}", exc_info=True)
             return None
 
-        # Format the prompt with all necessary data
         prompt = self.suitability_prompt_template.format(
             structured_resume_json=structured_resume_json,
             job_details_json=job_details_json,
-            # --- Pass user profile data ---
             user_salary_min=user_profile.get('DESIRED_SALARY_MIN', 'N/A'),
             user_salary_max=user_profile.get('DESIRED_SALARY_MAX', 'N/A'),
             must_have_skills=", ".join(user_profile.get('MUST_HAVE_SKILLS', [])),
-            # --- Pass job salary data if available ---
             job_salary_min=job_details.get('min_amount', 'N/A'),
             job_salary_max=job_details.get('max_amount', 'N/A')
         )
@@ -120,11 +114,9 @@ class JobAnalyzer:
             content = response['message']['content']
             logger.debug(f"Ollama raw response (first 500 chars): {content[:500]} ...")
 
-            # Attempt to parse the JSON content
             analysis_data = json.loads(content)
             logger.debug("Successfully parsed JSON response from Ollama.")
 
-            # --- Parse the *enhanced* structure ---
             keyword_analysis_data = analysis_data.get('keyword_analysis', {})
             skill_match_data = analysis_data.get('skill_match_details', {})
             exp_match_data = analysis_data.get('experience_match_details', {})
@@ -152,14 +144,15 @@ class JobAnalyzer:
                  ),
                 salary_alignment=analysis_data.get('salary_alignment'),
                 alignment_details=analysis_data.get('alignment_details'),
-                date_analyzed=datetime.now() # Redundant due to default_factory, but explicit
+                date_analyzed=datetime.now()
             )
             return analysis_result
 
         except json.JSONDecodeError as e:
             logger.error(f"Failed to decode JSON response from Ollama for job analysis '{job_title}': {e}")
+            content = content if 'content' in locals() else '<Response content not captured>'
             logger.error(f"LLM response content was: {content}")
-            return None # Return None on failure
+            return None
         except Exception as e:
             logger.error(f"Error during suitability analysis for job '{job_title}': {e}", exc_info=True)
             return None
