@@ -25,7 +25,7 @@ ollama:
   # (Resume JSON + Job JSON + Prompt Template Text) sent for SUITABILITY analysis.
   # Helps prevent context window overflows or excessively long processing times.
   # Tune based on your chosen model's context window and system memory.
-  max_prompt_chars: 24000
+  max_prompt_chars: 100s000
 
 # --- Prompt File Locations ---
 # Specifies where the LLM prompt template files are located, relative to the project root.
