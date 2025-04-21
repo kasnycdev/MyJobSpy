@@ -4,7 +4,7 @@ import json
 import os
 import argparse
 import asyncio
-import time # <--- ADD THIS IMPORT
+import time # Keep time import
 from analysis.analyzer import ResumeAnalyzer
 from typing import List, Dict, Any, Optional, Tuple
 from pathlib import Path
@@ -17,13 +17,11 @@ from config import CFG, DEFAULT_ANALYSIS_JSON
 
 log = logging.getLogger(__name__)
 
-# --- load_and_extract_resume (async version - unchanged) ---
+# --- load_and_extract_resume (async - unchanged) ---
 async def load_and_extract_resume(resume_path: str, analyzer: ResumeAnalyzer) -> Optional[ResumeData]:
-    """ASYNC Loads resume, parses text, and extracts structured data."""
+    # ... (keep async version) ...
     log.info(f"Processing resume file: {resume_path}")
-    try:
-        loop = asyncio.get_running_loop()
-        resume_text = await loop.run_in_executor(None, parse_resume, resume_path)
+    try: loop = asyncio.get_running_loop(); resume_text = await loop.run_in_executor(None, parse_resume, resume_path)
     except FileNotFoundError: log.error(f"Resume file not found: {resume_path}"); return None
     except Exception as parse_err: log.error(f"Error parsing resume: {parse_err}", exc_info=True); return None
     if not resume_text: log.error("Parsed empty resume text."); return None
@@ -32,20 +30,19 @@ async def load_and_extract_resume(resume_path: str, analyzer: ResumeAnalyzer) ->
     log.info("Successfully extracted structured data from resume.")
     return structured_resume_data
 
-# --- analyze_jobs (Unchanged from previous 'gather' version) ---
+# --- analyze_jobs (REVISED to use asyncio.gather reliably) ---
 async def analyze_jobs(
     analyzer: ResumeAnalyzer,
     structured_resume_data: ResumeData,
     job_list: List[Dict[str, Any]]
 ) -> List[AnalyzedJob]:
-    """ASYNC Analyzes a list of jobs against the resume data concurrently using asyncio.gather."""
-    analyzed_results: list[AnalyzedJob] = []
+    """ASYNC Analyzes jobs concurrently using asyncio.gather and handles errors."""
     total_jobs = len(job_list)
     if total_jobs == 0: log.warning("No jobs provided for analysis."); return []
     log.info(f"Starting ASYNC analysis of {total_jobs} jobs using asyncio.gather...")
 
+    # --- Wrapper Function (Keep as before) ---
     async def analyze_single_job_wrapper(job_dict):
-        """Wrapper to call analyze_suitability and return placeholder on error/None."""
         job_title = job_dict.get('title', 'N/A')
         analysis_result: Optional[JobAnalysisResult] = None
         try:
@@ -63,37 +60,27 @@ async def analyze_jobs(
                                                 salary_alignment="N/A", benefit_alignment="N/A", missing_keywords=[])
             return AnalyzedJob(original_job_data=job_dict, analysis=failed_analysis)
 
+    # --- Create Coroutines ---
     coroutines = [analyze_single_job_wrapper(job_dict) for job_dict in job_list]
 
-    try:
-        from rich.progress import track # Using rich.progress.track is simpler with gather
-        RICH_PROGRESS_AVAILABLE_IN_ASYNC = True # Flag if needed elsewhere
-        log.info("Analyzing jobs (using rich.progress.track if available)...")
-        # Rich track can iterate over awaitables when used carefully
-        analyzed_results = []
-        # Wrap coroutines for track to work properly with descriptions
-        async def _get_result(coro): return await coro
-        tasks_to_track = [_get_result(coro) for coro in coroutines]
+    # --- Run with gather ---
+    log.info(f"Submitting {len(coroutines)} analysis tasks to asyncio.gather...")
+    start_time = time.time()
 
-        # Track the awaitables directly
-        for result in track(tasks_to_track, description="Analyzing jobs...", total=total_jobs):
-             analyzed_results.append(result) # result is already the AnalyzedJob object
+    # return_exceptions=False because wrapper handles exceptions now
+    # This line WAITS until ALL tasks are done and returns a list of results
+    analyzed_results: List[AnalyzedJob] = await asyncio.gather(*coroutines)
 
-    except ImportError:
-        RICH_PROGRESS_AVAILABLE_IN_ASYNC = False
-        log.warning("Rich progress bar unavailable. Using basic asyncio.gather.")
-        # Fallback without rich progress bar
-        start_time = time.time() # Now time is defined
-        analyzed_results = await asyncio.gather(*coroutines)
-        end_time = time.time()
-        duration = end_time - start_time
-        jobs_per_sec = total_jobs / duration if duration > 0 else 0
-        log.info(f"Basic analysis processing complete in {duration:.2f}s ({jobs_per_sec:.2f} jobs/sec).")
+    end_time = time.time()
+    duration = end_time - start_time
+    jobs_per_sec = total_jobs / duration if duration > 0 else 0
+    log.info(f"Async analysis via gather complete. Processed {len(analyzed_results)}/{total_jobs} jobs in {duration:.2f} seconds ({jobs_per_sec:.2f} jobs/sec).")
 
+    # --- Calculate successful analyses AFTER gather returns actual results ---
     successful_analyses = sum(1 for res in analyzed_results if res.analysis and res.analysis.suitability_score > 0)
-    log.info(f"Async analysis complete. Processed {len(analyzed_results)}/{total_jobs} jobs. Generated {successful_analyses} successful analysis results with score > 0.")
-    return analyzed_results
+    log.info(f"Generated {successful_analyses} successful analysis results with score > 0.")
 
+    return analyzed_results # This list now contains AnalyzedJob objects
 
 # --- apply_filters_sort_and_save (Unchanged from previous version) ---
 def apply_filters_sort_and_save(
@@ -101,7 +88,7 @@ def apply_filters_sort_and_save(
     output_path: str,
     filter_args: Dict[str, Any]
 ) -> List[Dict[str, Any]]:
-    """Applies filters (including min score), sorts, and saves results."""
+    # ... (Keep the exact implementation from previous response) ...
     min_score = filter_args.pop('min_score', 0)
     jobs_to_filter = [res.original_job_data for res in analyzed_results]
     standard_filter_args = filter_args
@@ -131,9 +118,8 @@ def apply_filters_sort_and_save(
     except Exception as e: log.error(f"Error writing output file {output_path_obj}: {e}", exc_info=True)
     return final_results_json
 
-# --- Main execution block (async runner - unchanged) ---
+# --- Main execution block (async runner - unchanged from previous) ---
 async def async_main(args):
-    """Async version of the main logic for standalone run."""
     # ... (Keep previous async_main logic) ...
     log.info("Starting standalone ASYNC analysis process...")
     analyzer = None
@@ -147,13 +133,25 @@ async def async_main(args):
         except Exception as e: log.error(f"Error loading jobs JSON: {e}"); return
         if not job_list: log.error("No jobs loaded. Exiting."); return
 
-        analyzed_results = await analyze_jobs(analyzer, structured_resume, job_list)
+        analyzed_results = await analyze_jobs(analyzer, structured_resume, job_list) # Await the gather call
 
         filter_args_dict = {}
         # Populate filter_args_dict including all filters
         if args.min_salary is not None: filter_args_dict['salary_min'] = args.min_salary
-        # ... (rest of filter population) ...
-        filter_args_dict['min_score'] = args.min_score
+        if args.max_salary is not None: filter_args_dict['salary_max'] = args.max_salary
+        if args.filter_work_models: filter_args_dict['work_models'] = [wm.strip().lower() for wm in args.filter_work_models.split(',')]
+        if args.filter_job_types: filter_args_dict['job_types'] = [jt.strip().lower() for jt in args.filter_job_types.split(',')]
+        if args.filter_companies: filter_args_dict['filter_companies'] = [c.strip().lower() for c in args.filter_companies.split(',')]
+        if args.exclude_companies: filter_args_dict['exclude_companies'] = [c.strip().lower() for c in args.exclude_companies.split(',')]
+        if args.filter_title_keywords: filter_args_dict['filter_title_keywords'] = [k.strip().lower() for k in args.filter_title_keywords.split(',')]
+        if args.filter_date_after: filter_args_dict['filter_date_after'] = args.filter_date_after
+        if args.filter_date_before: filter_args_dict['filter_date_before'] = args.filter_date_before
+        filter_args_dict['min_score'] = args.min_score # Pass min_score in dict
+        if args.filter_remote_country: filter_args_dict['filter_remote_country'] = args.filter_remote_country.strip()
+        if args.filter_proximity_location:
+             filter_args_dict['filter_proximity_location'] = args.filter_proximity_location.strip()
+             filter_args_dict['filter_proximity_range'] = args.filter_proximity_range
+             filter_args_dict['filter_proximity_models'] = [pm.strip().lower() for pm in args.filter_proximity_models.split(',')]
 
         apply_filters_sort_and_save(analyzed_results, args.output, filter_args_dict)
 
@@ -162,36 +160,33 @@ async def async_main(args):
     log.info("Standalone analysis finished.")
 
 def main():
-    """Parses args and runs the async main function."""
-    # --- Argument Parsing (Unchanged) ---
+    # ... (Keep argument parsing and asyncio.run call) ...
     parser = argparse.ArgumentParser(description="Analyze pre-existing job JSON against a resume.")
-    # ... (keep all arguments) ...
     parser.add_argument("--resume", required=True, help="Path to resume file.")
     parser.add_argument("--jobs", required=True, help="Path to jobs JSON file.")
     parser.add_argument("--output", default=str(DEFAULT_ANALYSIS_JSON), help="Output JSON file path.")
     parser.add_argument("-v", "--verbose", action="store_true", help="Enable DEBUG logging.")
-    parser.add_argument("--min-salary", type=int, help="Min desired salary.")
-    parser.add_argument("--max-salary", type=int, help="Max desired salary.")
-    parser.add_argument("--filter-work-models", help="Standard work models.")
-    parser.add_argument("--filter-job-types", help="Comma-separated job types.")
-    parser.add_argument("--filter-companies", help="Include ONLY these companies (comma-sep).")
-    parser.add_argument("--exclude-companies", help="EXCLUDE these companies (comma-sep).")
-    parser.add_argument("--filter-title-keywords", help="Require ANY of these keywords in title (comma-sep).")
-    parser.add_argument("--filter-date-after", help="Include jobs posted ON or AFTER YYYY-MM-DD.")
-    parser.add_argument("--filter-date-before", help="Include jobs posted ON or BEFORE YYYY-MM-DD.")
-    parser.add_argument("--min-score", type=int, default=0, help="Minimum suitability score filter (0-100). Default 0.")
-    parser.add_argument("--filter-remote-country", help="Filter REMOTE jobs in country.")
-    parser.add_argument("--filter-proximity-location", help="Reference location for proximity.")
-    parser.add_argument("--filter-proximity-range", type=float, help="Distance in miles for proximity.")
-    parser.add_argument("--filter-proximity-models", default="Hybrid,On-site", help="Work models for proximity.")
     parser.add_argument("--force-resume-reparse", action="store_true", help="Ignore cached resume data.")
-
+    filter_group = parser.add_argument_group('Standard Filtering Options')
+    filter_group.add_argument("--min-salary", type=int, help="Min desired salary.")
+    filter_group.add_argument("--max-salary", type=int, help="Max desired salary.")
+    filter_group.add_argument("--filter-work-models", help="Standard work models.")
+    filter_group.add_argument("--filter-job-types", help="Comma-separated job types.")
+    filter_group.add_argument("--filter-companies", help="Include ONLY these companies (comma-sep).")
+    filter_group.add_argument("--exclude-companies", help="EXCLUDE these companies (comma-sep).")
+    filter_group.add_argument("--filter-title-keywords", help="Require ANY of these keywords in title (comma-sep).")
+    filter_group.add_argument("--filter-date-after", help="Include jobs posted ON or AFTER YYYY-MM-DD.")
+    filter_group.add_argument("--filter-date-before", help="Include jobs posted ON or BEFORE YYYY-MM-DD.")
+    filter_group.add_argument("--min-score", type=int, default=0, help="Minimum suitability score filter (0-100). Default 0.")
+    adv_loc_group = parser.add_argument_group('Advanced Location Filtering')
+    adv_loc_group.add_argument("--filter-remote-country", help="Filter REMOTE jobs in country.")
+    adv_loc_group.add_argument("--filter-proximity-location", help="Reference location for proximity.")
+    adv_loc_group.add_argument("--filter-proximity-range", type=float, help="Distance in miles for proximity.")
+    adv_loc_group.add_argument("--filter-proximity-models", default="Hybrid,On-site", help="Work models for proximity.")
     args = parser.parse_args()
-    # --- Logging setup unchanged ---
     log_level = logging.DEBUG if args.verbose else CFG.get('logging', {}).get('level', 'INFO').upper()
     try: logging.getLogger().setLevel(log_level); log.info(f"Log level set to: {logging.getLevelName(logging.getLogger().getEffectiveLevel())}")
     except ValueError: log.error(f"Invalid log level: {log_level}. Using INFO."); logging.getLogger().setLevel(logging.INFO)
-
     try: asyncio.run(async_main(args))
     except KeyboardInterrupt: print(); log.warning("[yellow]Standalone execution interrupted.[/yellow]" if RICH_AVAILABLE else "Standalone execution interrupted.")
 
