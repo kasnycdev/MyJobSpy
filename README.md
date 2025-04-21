@@ -1,47 +1,17 @@
-## Help Support MyJobSpy 🕵️‍♂️💼
 
-Hi there! I'm Kenneth Santoro ([kasnycdev](https://github.com/kasnycdev)), the creator and maintainer of **MyJobSpy**.
+**5. Determine Deprecated/Unused Files/Directories**
 
-**What is MyJobSpy?**
+Based on the analysis and the implemented changes, the following files are confirmed as no longer needed and should be removed:
 
-MyJobSpy is an open-source Python application designed to streamline your job search. It scrapes job listings from popular platforms (like LinkedIn, Indeed, etc.) and uses AI (currently via Ollama) to analyze job descriptions and match them against your resume, helping you quickly identify the most relevant opportunities.
+1.  **`config.py`**: This contained logs, not configuration. All configuration is now in `config.yaml`.
+2.  **`prompts/suitability_analysis.prompt`**: This is the older version of the suitability prompt. The active one is `prompts/job_suitability.prompt`.
 
-**Why Sponsor?**
+**Action Required (File Removal):**
 
-Developing and maintaining MyJobSpy takes significant time and effort. The job market landscape is constantly shifting, and websites frequently update their structure, which means the scrapers need regular maintenance to keep working reliably. Furthermore, refining the AI matching prompts, adding support for new job sites, improving features, and responding to user feedback all require dedicated development time.
+Execute these commands in your terminal from the project's root directory:
 
-Your sponsorship allows me to dedicate more time to:
-
-*   **Maintaining Scrapers:** Keeping up with website changes to ensure data collection remains functional.
-*   **Improving AI Matching:** Refining prompts, exploring new models, and enhancing the relevance of job matches.
-*   **Adding New Features:** Implementing user requests like support for more job sites, advanced filtering, or better reporting.
-*   **Bug Fixes & Support:** Addressing issues reported by the community.
-*   **Keeping MyJobSpy Free & Open Source:** Ensuring the tool remains accessible to everyone navigating the job market.
-
-Essentially, your support directly fuels the continued development and improvement of MyJobSpy, helping make the often-daunting task of job searching a little easier for everyone.
-
-**How Your Sponsorship Helps:**
-
-Whether it's covering the cost of a coffee to power a late-night coding session or contributing towards potential future costs (like proxies for testing or cloud services), every bit helps motivate and enable further development.
-
-Thank you for considering sponsoring MyJobSpy! Your support is greatly appreciated and makes a real difference. 🙏
-
----
-
-**Example Sponsorship Tiers (You'll configure these separately on GitHub):**
-
-You can set up different tiers with varying monthly amounts and rewards. Here are some simple ideas:
-
-1.  **Tier 1: Coffee Supporter ☕ ($5/month)**
-    *   **Reward:** My sincere thanks! Your name will be added to a `SPONSORS.md` file in the MyJobSpy repository as a token of appreciation.
-
-2.  **Tier 2: Project Booster 🚀 ($15/month)**
-    *   **Reward:** All previous rewards + Your GitHub avatar/name potentially featured on the MyJobSpy README (optional, if you manage this section). Early access to discuss potential new features in dedicated GitHub Discussions threads.
-
-3.  **Tier 3: MyJobSpy Champion 🏆 ($30/month)**
-    *   **Reward:** All previous rewards + A special mention in release notes for major updates during your sponsorship period.
-
-4.  **One-Time Donation:**
-    *   **Reward:** A huge thank you for your generous one-off contribution! Your name will also be added to the `SPONSORS.md` file.
-
----
+```bash
+git rm config.py
+git rm prompts/suitability_analysis.prompt
+git commit -m "Clean up: Remove unused config.py (logs) and old suitability_analysis.prompt"
+git push origin main # Or your current branch

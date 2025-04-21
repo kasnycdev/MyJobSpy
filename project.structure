@@ -1,24 +1,44 @@
 MyJobSpy/
-├── .gitignore
-├── README.md
-├── requirements.txt
-├── config.py             # Central configuration
-├── run_pipeline.py       # NEW: Main execution script
-├── main_matcher.py       # Refactored analysis functions
-├── parsers/
+│
+├── .gitignore             # Git ignore configuration
+├── config.yaml            # Main user configuration (SEARCH, SCRAPING, AI, OUTPUT, USER_PROFILE)
+├── LICENSE                # Your project's license file (e.g., MIT)
+├── README.md              # Project overview, setup, usage (Needs update)
+├── requirements.txt       # Project dependencies (Needs update)
+├── run_pipeline.py        # Main script to execute the scraping and analysis pipeline
+│
+├── analysis/              # Code related to AI analysis
 │   ├── __init__.py
-│   ├── resume_parser.py  # (Content unchanged from previous versions)
-│   └── job_parser.py     # (Kept, but less critical now)
-├── analysis/
+│   └── analyzer.py        # Class for interacting with Ollama, loading prompts
+│
+├── models/                # Pydantic models for data validation and structure
 │   ├── __init__.py
-│   ├── analyzer.py       # Updated with prompt loading, retries
-│   ├── models.py         # (Content unchanged from previous versions)
-│   └── prompts/          # NEW: Directory for prompt files
-│       ├── resume_extraction.prompt
-│       └── suitability_analysis.prompt
-├── filtering/
+│   └── models.py          # Defines OriginalJobData, JobAnalysisResult, CombinedJobResult etc.
+│
+├── prompts/               # Prompt templates for the LLM
+│   ├── resume_extraction.prompt  # Prompt for parsing resume text
+│   └── job_suitability.prompt    # Prompt for analyzing job suitability
+│
+├── scrapers/              # Modules for scraping specific job sites (using JobSpy or custom)
 │   ├── __init__.py
-│   ├── filter.py         # Updated logging/checks
-│   └── filter_utils.py   # (Content unchanged from previous versions)
-└── utils/                # Optional
-    └── __init__.py
+│   ├── linkedin.py        # Example: Specific logic/overrides for LinkedIn (if needed beyond base JobSpy)
+│   └── indeed.py          # Example: Specific logic/overrides for Indeed (if needed beyond base JobSpy)
+│   └── ...                # Other scraper modules if custom scraping is added
+│
+├── utils/                 # Utility functions and helper modules
+│   ├── __init__.py
+│   ├── file_operations.py # Functions for saving data (e.g., save_analysis_results)
+│   ├── logging_setup.py   # Logging configuration function (setup_logging)
+│   └── driver_setup.py    # (Optional) If using custom Selenium setup beyond JobSpy (e.g., setup_driver)
+│   └── ...                # Other utility modules
+│
+├── data/                  # (Optional) Directory for input data like resumes
+│   └── resume/
+│       └── Kenneth.A.Santoro.MyJobSpy.Resume.pdf # Example resume file (ensure path matches config.yaml)
+│       └── .gitkeep       # Keep directory structure, but often ignored by gitignore
+│
+├── output/                # Directory for generated output files (ignored by gitignore)
+│   └── .gitkeep           # To keep the directory structure in Git if desired
+│
+└── venv/                  # Python virtual environment directory (ignored by gitignore)
+    └── ...
