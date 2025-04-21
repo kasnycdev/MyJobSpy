@@ -1,185 +1,134 @@
+# main_matcher.py
 import logging
+from typing import List, Dict, Any, Optional
+from analysis.analyzer import JobAnalyzer # Assuming analyzer class path
+from models import CombinedJobResult, JobAnalysisResult, OriginalJobData # Import models
 import json
 import os
-import argparse
-from typing import List, Dict, Any, Optional, Tuple
+from tqdm import tqdm # For progress bar
 
-from parsers.resume_parser import parse_resume
-from parsers.job_parser import load_job_mandates # Kept for direct JSON input if needed
-from analysis.analyzer import ResumeAnalyzer
-from analysis.models import ResumeData, AnalyzedJob, JobAnalysisResult
-from filtering.filter import apply_filters
-import config
+logger = logging.getLogger(__name__)
 
-# Setup logger
-log = logging.getLogger(__name__)
-
-def load_and_extract_resume(resume_path: str, analyzer: ResumeAnalyzer) -> Optional[ResumeData]:
-    """Loads resume, parses text, and extracts structured data."""
-    log.info(f"Processing resume file: {resume_path}")
-    resume_text = parse_resume(resume_path)
-    if not resume_text:
-        log.error("Failed to parse resume text.")
+def load_and_extract_resume(resume_filepath: str, analyzer: JobAnalyzer) -> Optional[Dict[str, Any]]:
+    """Loads resume text and calls LLM for structured data extraction."""
+    logger.info(f"Processing resume file: {resume_filepath}")
+    if not os.path.exists(resume_filepath):
+        logger.error(f"Resume file not found: {resume_filepath}")
         return None
-    structured_resume_data = analyzer.extract_resume_data(resume_text)
-    if not structured_resume_data:
-        log.error("Failed to extract structured data from resume.")
-        return None
-    log.info("Successfully extracted structured data from resume.")
-    return structured_resume_data
-
-def analyze_jobs(
-    analyzer: ResumeAnalyzer,
-    structured_resume_data: ResumeData,
-    job_list: List[Dict[str, Any]]
-) -> List[AnalyzedJob]:
-    """Analyzes a list of jobs against the resume data."""
-    analyzed_results: list[AnalyzedJob] = []
-    total_jobs = len(job_list)
-    log.info(f"Starting analysis of {total_jobs} jobs...")
-
-    from rich.progress import track # Use rich progress bar here
-
-    for i, job_dict in enumerate(track(job_list, description="Analyzing jobs...")):
-        job_title = job_dict.get('title', 'N/A')
-        log.debug(f"Analyzing job {i+1}/{total_jobs}: {job_title}") # Debug level for less noise
-
-        # Ensure job_dict is suitable (e.g., has description) - Analyzer does this now
-        analysis_result = analyzer.analyze_suitability(structured_resume_data, job_dict)
-
-        analysis_status = "success" if analysis_result else "failed"
-        if not analysis_result:
-            log.warning(f"Analysis failed for job: {job_title}")
-            # Create a placeholder analysis if desired, or skip
-            analysis_result = JobAnalysisResult(
-                 #suitability_score=-1, # Indicate failure
-                 suitability_score=0,
-                 justification="Analysis failed or was skipped.",
-                 skill_match=None, experience_match=None, qualification_match=None,
-                 salary_alignment="N/A", benefit_alignment="N/A", missing_keywords=[]
-             )
-
-        # Combine original job data with analysis results
-        # Add analysis status if needed
-        # job_dict["analysis_status"] = analysis_status # Optional: Add status to original data
-        analyzed_job = AnalyzedJob(original_job_data=job_dict, analysis=analysis_result)
-        analyzed_results.append(analyzed_job)
-
-    log.info(f"Analysis complete. Successfully analyzed (or attempted) {len(analyzed_results)} jobs.")
-    return analyzed_results
-
-
-def apply_filters_sort_and_save(
-    analyzed_results: List[AnalyzedJob],
-    output_path: str,
-    filter_args: Dict[str, Any]
-) -> List[Dict[str, Any]]:
-    """Applies filters, sorts, and saves the final results."""
-
-    # Filtering needs the data in a list of dicts format that filter.py expects
-    # We need to decide: Filter based on original data or analyzed data?
-    # Let's filter based on original_job_data for salary, location etc.
-    jobs_to_filter = [res.original_job_data for res in analyzed_results]
-
-    if filter_args:
-        log.info("Applying post-analysis filters...")
-        filtered_original_jobs = apply_filters(jobs_to_filter, **filter_args)
-        log.info(f"{len(filtered_original_jobs)} jobs passed filters.")
-        # Now, map back to the full AnalyzedJob objects
-        filtered_titles_urls = {(job.get('title', ''), job.get('url', '')) for job in filtered_original_jobs}
-        final_filtered_results = [
-            res for res in analyzed_results
-            if (res.original_job_data.get('title', ''), res.original_job_data.get('url', '')) in filtered_titles_urls
-        ]
-    else:
-        final_filtered_results = analyzed_results # No filters applied
-
-    # Sort the filtered results by suitability score (descending)
-    # Handle potential -1 scores from failed analyses (place them last)
-    log.info("Sorting results by suitability score...")
-    final_filtered_results.sort(
-        key=lambda x: x.analysis.suitability_score if x.analysis else -1,
-        reverse=True
-    )
-
-    # Convert Pydantic models to dictionaries for JSON serialization
-    final_results_json = [result.model_dump() for result in final_filtered_results]
-
-    # Save Output
-    output_dir = os.path.dirname(output_path)
-    if output_dir:
-        os.makedirs(output_dir, exist_ok=True)
 
     try:
-        with open(output_path, 'w', encoding='utf-8') as f:
-            json.dump(final_results_json, f, indent=4)
-        log.info(f"Successfully saved {len(final_results_json)} analyzed and filtered jobs to {output_path}")
-    except IOError as e:
-        log.error(f"Error writing output file {output_path}: {e}")
-    except TypeError as e:
-        log.error(f"Error serializing results to JSON: {e}. Check data types in models.", exc_info=True)
-        log.debug(f"Problematic data structure (first item): {final_results_json[0] if final_results_json else 'N/A'}")
+        # Basic text extraction (replace with PDF/DOCX parser if needed)
+        if resume_filepath.lower().endswith('.txt'):
+             with open(resume_filepath, 'r', encoding='utf-8') as f:
+                  resume_text = f.read()
+        elif resume_filepath.lower().endswith('.pdf'):
+             # Add robust PDF parsing logic here (e.g., using PyPDF2, pdfminer.six)
+             logger.info(f"Parsing PDF resume: {os.path.basename(resume_filepath)}")
+             # Placeholder - replace with actual PDF parsing
+             try:
+                  import fitz # PyMuPDF
+                  doc = fitz.open(resume_filepath)
+                  resume_text = ""
+                  for page in doc:
+                       resume_text += page.get_text()
+                  doc.close()
+                  logger.info(f"Successfully parsed PDF text ({len(resume_text)} chars).")
+             except ImportError:
+                  logger.error("PyMuPDF not installed. Cannot parse PDF. Install with 'pip install PyMuPDF'")
+                  return None
+             except Exception as pdf_err:
+                   logger.error(f"Error parsing PDF {resume_filepath}: {pdf_err}", exc_info=True)
+                   return None
+        else:
+            logger.error(f"Unsupported resume file format: {resume_filepath}. Only .txt and .pdf supported currently.")
+            return None
 
-    return final_results_json # Return the final list of dicts
+        if not resume_text:
+             logger.error("Resume text could not be extracted or is empty.")
+             return None
 
-# --- Main execution block (for potential direct testing/use) ---
-def main():
-    """Main function for standalone execution (less common now)."""
-    parser = argparse.ArgumentParser(description="Analyze pre-existing job JSON against a resume.")
-    parser.add_argument("--resume", required=True, help="Path to the resume file (.docx or .pdf)")
-    parser.add_argument("--jobs", required=True, help="Path to the JSON file containing job mandates (list of objects)")
-    parser.add_argument("--output", default=config.DEFAULT_ANALYSIS_JSON, help="Path for the output JSON file")
-    parser.add_argument("-v", "--verbose", action="store_true", help="Enable DEBUG level logging.")
+        # Call the analyzer to extract structured data
+        structured_data = analyzer.extract_resume_data(resume_text)
+        if structured_data:
+             logger.info("Successfully extracted structured data from resume.")
+             # Optionally save the structured resume to a file for inspection/reuse
+             # with open("./output/structured_resume.json", "w") as f:
+             #     json.dump(structured_data, f, indent=4)
+        else:
+             logger.error("Failed to get structured data from resume via LLM.")
 
-    # Add filtering arguments mirroring run_pipeline.py
-    parser.add_argument("--min-salary", type=int, help="Minimum desired annual salary for filtering.")
-    parser.add_argument("--max-salary", type=int, help="Maximum desired annual salary for filtering.")
-    parser.add_argument("--filter-locations", help="Comma-separated list of desired locations for filtering (e.g., 'New York,Remote')")
-    parser.add_argument("--filter-work-models", help="Comma-separated list of desired work models for filtering (e.g., 'Remote,Hybrid')")
-    parser.add_argument("--filter-job-types", help="Comma-separated list of desired job types for filtering (e.g., 'Full-time')")
+        return structured_data
 
-    args = parser.parse_args()
-
-    # Setup logging based on verbosity
-    log_level = logging.DEBUG if args.verbose else config.LOG_LEVEL
-    logging.basicConfig(level=log_level, format=config.LOG_FORMAT, datefmt=config.LOG_DATE_FORMAT)
-    # Consider using RichHandler here too if running standalone
-    # from rich.logging import RichHandler
-    # logging.basicConfig(level=log_level, format=config.LOG_FORMAT, datefmt=config.LOG_DATE_FORMAT, handlers=[RichHandler()])
-
-
-    log.info("Starting standalone analysis process...")
-
-    try:
-        analyzer = ResumeAnalyzer()
     except Exception as e:
-        log.error(f"Failed to initialize analyzer: {e}", exc_info=True)
-        return
+        logger.error(f"Error loading/processing resume {resume_filepath}: {e}", exc_info=True)
+        return None
 
-    structured_resume = load_and_extract_resume(args.resume, analyzer)
-    if not structured_resume:
-        log.error("Exiting due to resume processing failure.")
-        return
 
-    log.info(f"Loading jobs from JSON file: {args.jobs}")
-    job_list = load_job_mandates(args.jobs) # Using the original JSON loader here
-    if not job_list:
-        log.error("No jobs loaded from JSON file. Exiting.")
-        return
+def analyze_jobs(analyzer: JobAnalyzer,
+                 structured_resume: Dict[str, Any],
+                 jobs_list: List[Dict[str, Any]],
+                 user_profile: Dict[str, Any] # Pass user profile
+                 ) -> List[CombinedJobResult]:
+    """
+    Analyzes a list of job dictionaries against the structured resume.
 
-    analyzed_results = analyze_jobs(analyzer, structured_resume, job_list)
+    Args:
+        analyzer: The JobAnalyzer instance.
+        structured_resume: The dictionary representing the parsed resume.
+        jobs_list: A list of dictionaries, each representing a job posting (processed).
+        user_profile: Dictionary containing user preferences (salary, skills).
 
-    filter_args = {}
-    if args.min_salary is not None: filter_args['salary_min'] = args.min_salary
-    if args.max_salary is not None: filter_args['salary_max'] = args.max_salary
-    if args.filter_locations: filter_args['locations'] = [loc.strip() for loc in args.filter_locations.split(',')]
-    if args.filter_work_models: filter_args['work_models'] = [wm.strip() for wm in args.filter_work_models.split(',')]
-    if args.filter_job_types: filter_args['job_types'] = [jt.strip() for jt in args.filter_job_types.split(',')]
+    Returns:
+        A list of CombinedJobResult objects containing original data and analysis.
+    """
+    results = []
+    if not jobs_list:
+        logger.warning("No jobs provided for analysis.")
+        return results
 
-    apply_filters_sort_and_save(analyzed_results, args.output, filter_args)
+    logger.info(f"Starting analysis of {len(jobs_list)} jobs...")
 
-    log.info("Standalone analysis finished.")
+    # Wrap the loop with tqdm for a progress bar
+    for job_data_dict in tqdm(jobs_list, desc="Analyzing jobs"):
+        try:
+            # Validate and create OriginalJobData model instance
+            # This helps catch type errors early
+            original_data = OriginalJobData(**job_data_dict)
 
-if __name__ == "__main__":
-    # This allows running `python main_matcher.py --resume ... --jobs ...`
-    main()
+            # Call the analyzer's suitability function
+            analysis_result: Optional[JobAnalysisResult] = analyzer.analyze_suitability(
+                structured_resume,
+                original_data.model_dump(), # Pass the validated dict
+                user_profile # Pass user profile to analysis
+            )
+
+            if analysis_result:
+                 logger.debug(f"Analysis successful for job: {original_data.title}")
+            else:
+                 # Handle analysis failure for this specific job
+                 logger.warning(f"Analysis failed for job: {original_data.title} (ID: {original_data.id})")
+                 # Create a CombinedJobResult with None for analysis
+                 analysis_result = None # Ensure it's None
+
+            combined_result = CombinedJobResult(
+                original_job_data=original_data,
+                analysis=analysis_result # This will be None if analysis failed
+            )
+            results.append(combined_result)
+
+        except Exception as e:
+            job_title = job_data_dict.get('title', 'Unknown Job')
+            job_id = job_data_dict.get('id', 'N/A')
+            logger.error(f"Critical error processing job '{job_title}' (ID: {job_id}): {e}", exc_info=True)
+            # Optionally create a result entry indicating the error
+            try:
+                 error_original_data = OriginalJobData(**job_data_dict) # Try to parse original data at least
+                 error_analysis = JobAnalysisResult(suitability_score=0, justification=f"Error during processing: {e}")
+                 results.append(CombinedJobResult(original_job_data=error_original_data, analysis=error_analysis))
+            except Exception as inner_e:
+                 logger.error(f"Could not even create error entry for job ID {job_id}: {inner_e}")
+
+    logger.info(f"Finished analyzing jobs. {len(results)} results processed.")
+    return results
+
+# Note: The main execution logic calling these functions is now in run_pipeline.py

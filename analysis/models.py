@@ -1,49 +1,86 @@
-from pydantic import BaseModel, Field
-from typing import List, Optional, Union, Dict, Any
 
-# ExperienceItem and EducationItem remain the same
-class ExperienceItem(BaseModel):
-    title: Optional[str] = Field(None, description="Job title")
-    company: Optional[str] = Field(None, description="Company name")
-    years: Optional[Union[float, str]] = Field(None, description="Years in the role")
-    description: Optional[str] = Field(None, description="Full description of responsibilities/achievements") # Updated description
+**2. Improve/Augment Scraped Data & Add User Context (Code)**
 
-class EducationItem(BaseModel):
-    degree: Optional[str] = Field(None, description="Degree obtained")
-    institution: Optional[str] = Field(None, description="Institution name")
-    years: Optional[str] = Field(None, description="Years attended or graduation year")
+**(a) Update Pydantic Models (`models.py` or similar)**
 
-# New model for Key Accomplishments
-class AccomplishmentItem(BaseModel):
-    title: Optional[str] = Field(None, description="Title/heading of the accomplishment block")
-    description: Optional[str] = Field(None, description="Full description of the accomplishment")
+```python
+# models.py
+from pydantic import BaseModel, Field, validator
+from typing import Optional, List, Dict, Any, Literal
+from datetime import datetime
+import re
 
-# --- Updated ResumeData Model ---
-class ResumeData(BaseModel):
-    """Structured data extracted from a resume."""
-    summary: Optional[str] = Field(None, description="Full professional summary")
-    # --- ENSURE THESE FIELDS ARE PRESENT ---
-    management_skills: List[str] = Field([], description="List of management skills")
-    technical_skills: List[str] = Field([], description="List of technical skills")
-    key_accomplishments: List[AccomplishmentItem] = Field([], description="List of key accomplishments")
-    # --- ENSURE THESE FIELDS ARE PRESENT ---
-    experience: List[ExperienceItem] = Field([], description="Work experience history")
-    education: List[EducationItem] = Field([], description="Educational background")
-    total_years_experience: Optional[Union[float, str]] = Field(None, description="Estimated total years of professional experience (float preferred)")
+# Model for the original scraped job data (subset of JobSpy fields + our additions)
+class OriginalJobData(BaseModel):
+    id: Optional[str] = None
+    site: Optional[str] = None
+    url: Optional[str] = None
+    job_url_direct: Optional[str] = None
+    title: Optional[str] = None
+    company: Optional[str] = None
+    location: Optional[str] = None
+    date_posted: Optional[str] = None # Will be normalized later if needed
+    employment_type: Optional[str] = None
+    salary_source: Optional[str] = None
+    interval: Optional[str] = None
+    min_amount: Optional[float] = None
+    max_amount: Optional[float] = None
+    currency: Optional[str] = None
+    is_remote: Optional[bool] = None
+    job_level: Optional[str] = None
+    job_function: Optional[str] = None
+    listing_type: Optional[str] = None
+    emails: Optional[str | List[str]] = None # JobSpy might return str or list
+    description: Optional[str] = None
+    company_industry: Optional[str] = None
+    company_url: Optional[str] = None
+    company_logo: Optional[str] = None
+    company_url_direct: Optional[str] = None
+    company_addresses: Optional[str] = None
+    company_num_employees: Optional[str | int] = None # Can vary
+    company_revenue: Optional[str] = None
+    company_description: Optional[str] = None
+    skills: Optional[str | List[str]] = None
+    experience_range: Optional[str] = None
+    company_rating: Optional[float] = None
+    company_reviews_count: Optional[int] = None
+    vacancy_count: Optional[int] = None
+    work_from_home_type: Optional[str] = None
+    salary_text: Optional[str] = None # Keep raw text for potential parsing
+    benefits_text: Optional[str] = None
 
-    # Note: Ensure the old combined 'skills: List[str]' field is REMOVED if it was present.
+    # --- Our Added Fields for Context/Processing ---
+    salary_estimated: bool = False
+    normalized_date_posted: Optional[datetime] = None
 
-# JobAnalysisResult and AnalyzedJob remain the same as before
+
+# Model for Keyword Analysis (nested in JobAnalysisResult)
+class KeywordAnalysis(BaseModel):
+    matched_required: Optional[List[str]] = []
+    missing_required: Optional[List[str]] = []
+    missing_preferred: Optional[List[str]] = []
+
+# Model for Match Details (nested in JobAnalysisResult)
+class MatchDetails(BaseModel):
+    assessment: Optional[Literal["Strong Match", "Partial Match", "Weak Match", "Unknown"]] = "Unknown"
+    reasoning: Optional[str] = None
+
+# Model for the AI Analysis Result
 class JobAnalysisResult(BaseModel):
-    suitability_score: int = Field(..., ge=0, le=100, description="Overall suitability score (0-100%)")
-    justification: str = Field(..., description="Textual explanation for the score")
-    skill_match: Optional[bool] = Field(None, description="Does the resume have the core required skills?")
-    experience_match: Optional[bool] = Field(None, description="Does the resume meet the required experience level?")
-    qualification_match: Optional[bool] = Field(None, description="Does the resume meet the core qualifications?")
-    salary_alignment: Optional[str] = Field(None, description="Assessment of salary fit (e.g., 'Likely Fit', 'Below Range', 'Above Range', 'N/A')")
-    benefit_alignment: Optional[str] = Field(None, description="Brief assessment of benefit alignment (e.g., 'Mentions Health', 'N/A')")
-    missing_keywords: List[str] = Field([], description="Key required skills/keywords potentially missing from the resume")
+    suitability_score: Optional[int] = Field(None, ge=0, le=100)
+    justification: Optional[str] = None
+    keyword_analysis: Optional[KeywordAnalysis] = KeywordAnalysis() # Default to empty lists
+    skill_match_details: Optional[MatchDetails] = MatchDetails()
+    experience_match_details: Optional[MatchDetails] = MatchDetails()
+    qualification_match_details: Optional[MatchDetails] = MatchDetails()
+    salary_alignment: Optional[Literal[
+        "Below User Range", "Within User Range", "Above User Range",
+        "Partially Overlaps", "Unknown"
+    ]] = "Unknown"
+    alignment_details: Optional[str] = None
+    date_analyzed: datetime = Field(default_factory=datetime.now)
 
-class AnalyzedJob(BaseModel):
-    original_job_data: Dict[str, Any] = Field(..., description="The original job mandate dictionary")
-    analysis: JobAnalysisResult = Field(..., description="The GenAI analysis results")
+# Top-level model for the combined results in the JSON file
+class CombinedJobResult(BaseModel):
+    original_job_data: OriginalJobData
+    analysis: Optional[JobAnalysisResult] = None # Analysis might fail or be skipped

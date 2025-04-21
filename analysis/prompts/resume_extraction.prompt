@@ -1,12 +1,14 @@
+# prompts/resume_extraction.prompt
+
 You are an expert Human Resources assistant specializing in parsing and structuring resume information. Your task is to meticulously extract detailed information from the provided resume text and format it as a JSON object.
 
 **Instructions:**
 
-1.  **Analyze the entire resume text provided below the `--- RESUME TEXT START ---` marker.**
-2.  **Extract the information ONLY from the provided text.** Do not infer, guess, or add information not explicitly present.
-3.  **Format the output strictly as a JSON object.** Ensure the JSON is valid.
-4.  **If a specific piece of information is not found, use `null` or an empty list `[]` as appropriate for the field type.** Do not invent data.
-5.  **Pay close attention to details, especially quantifiable achievements, specific technologies/tools mentioned within job roles, and categorized skills.**
+1.  Analyze the entire resume text provided below the `--- RESUME TEXT START ---` marker.
+2.  Extract the information ONLY from the provided text. Do not infer, guess, or add information not explicitly present.
+3.  Format the output strictly as a JSON object. Ensure the JSON is valid.
+4.  If a specific piece of information is not found, use `null` or an empty list `[]` as appropriate for the field type.
+5.  Pay close attention to details, especially quantifiable achievements, specific technologies/tools mentioned within job roles, and categorized skills.
 
 **Desired JSON Structure:**
 
@@ -20,99 +22,94 @@ You are an expert Human Resources assistant specializing in parsing and structur
       "city": "string | null",
       "state": "string | null",
       "country": "string | null",
-      "full_address": "string | null" // Capture if full street address is present
+      "full_address": "string | null"
     }},
     "linkedin_url": "string | null",
-    "portfolio_url": "string | null", // Personal website, GitHub, etc.
-    "website_url": "string | null" // Other relevant websites
+    "portfolio_url": "string | null",
+    "website_url": "string | null"
   }},
   "summary_objective": {{
-    "type": "Summary | Objective | null", // Classify if possible
-    "text": "string | null", // The full text of the summary/objective section
-    "keywords": ["string"] // Extract key skills or themes mentioned IN the summary/objective text itself
+    "type": "Summary | Objective | null",
+    "text": "string | null",
+    "keywords": ["string"]
   }},
   "work_experience": [
     {{
       "company_name": "string | null",
       "job_title": "string | null",
-      "location": "string | null", // City, State or Remote
-      "start_date": "string | null", // Format as YYYY-MM or Month YYYY if possible, otherwise as text
-      "end_date": "string | null", // Use "Present" if current, otherwise date format as start_date
-      "duration": "string | null", // Extracted or calculated duration if available (e.g., "2 years 3 months")
-      "industry": "string | null", // If the company's industry is mentioned
-      "responsibilities": ["string"], // List of general duties and tasks described
-      "achievements": ["string"], // **KEY ENHANCEMENT**: Specifically extract bullet points describing quantifiable results, accomplishments, or impact (e.g., "Increased X by Y%", "Managed budget of $Z", "Led team of N")
-      "technologies_used": ["string"], // **KEY ENHANCEMENT**: List specific software, tools, programming languages, frameworks mentioned *within the context of this specific job role*.
-      "team_size": "string | integer | null" // If mentioned (e.g., "managed a team of 5")
+      "location": "string | null",
+      "start_date": "string | null",
+      "end_date": "string | null",
+      "duration": "string | null",
+      "industry": "string | null",
+      "responsibilities": ["string"],
+      "achievements": ["string"],
+      "technologies_used": ["string"],
+      "team_size": "string | integer | null"
     }}
-    // Add more job objects as found
   ],
   "education": [
     {{
       "institution_name": "string | null",
-      "degree_name": "string | null", // e.g., Bachelor of Science, Master of Arts
-      "major": "string | null", // e.g., Computer Science, Business Administration
-      "minor": "string | null", // If specified
-      "concentration": "string | null", // If specified
-      "location": "string | null", // City, State
-      "start_date": "string | null", // Date format as above
-      "end_date": "string | null", // Graduation date or expected date
-      "gpa": "float | string | null", // Extract if present (e.g., 3.8 or "3.8/4.0")
-      "honors": ["string"], // e.g., "Cum Laude", "Dean's List", "Thesis Honors"
-      "relevant_coursework": ["string"], // List key courses if mentioned
-      "thesis_title": "string | null" // If mentioned
+      "degree_name": "string | null",
+      "major": "string | null",
+      "minor": "string | null",
+      "concentration": "string | null",
+      "location": "string | null",
+      "start_date": "string | null",
+      "end_date": "string | null",
+      "gpa": "float | string | null",
+      "honors": ["string"],
+      "relevant_coursework": ["string"],
+      "thesis_title": "string | null"
     }}
-    // Add more education objects as found
   ],
   "skills": {{
     "technical": {{
         "programming_languages": ["string"],
-        "frameworks_libraries": ["string"], // e.g., React, Angular, Spring, .NET, Pandas, NumPy
-        "databases": ["string"], // e.g., SQL, PostgreSQL, MongoDB, Redis
-        "cloud_platforms": ["string"], // e.g., AWS, Azure, GCP
-        "operating_systems": ["string"], // e.g., Linux, Windows, macOS
-        "devops_tools": ["string"], // e.g., Docker, Kubernetes, Jenkins, Terraform
-        "data_tools": ["string"], // e.g., Tableau, Power BI, Spark, Hadoop
-        "erp_crm": ["string"], // e.g., SAP, Salesforce
-        "other_software": ["string"] // e.g., Microsoft Office Suite, Adobe Creative Suite, JIRA
+        "frameworks_libraries": ["string"],
+        "databases": ["string"],
+        "cloud_platforms": ["string"],
+        "operating_systems": ["string"],
+        "devops_tools": ["string"],
+        "data_tools": ["string"],
+        "erp_crm": ["string"],
+        "other_software": ["string"]
     }},
-    "soft_skills": ["string"], // e.g., Communication, Teamwork, Leadership, Problem Solving
-    "methodologies": ["string"], // e.g., Agile, Scrum, Waterfall, Lean
-    "languages": [ // Spoken/written languages
+    "soft_skills": ["string"],
+    "methodologies": ["string"],
+    "languages": [
         {{
             "language": "string",
-            "proficiency": "string | null" // e.g., Native, Fluent, Conversational, Basic (extract if specified)
+            "proficiency": "string | null"
         }}
     ],
-    "other_skills": ["string"] // Any skills that don't fit neatly above
+    "other_skills": ["string"]
   }},
   "certifications": [
       {{
           "name": "string | null",
           "issuing_organization": "string | null",
           "date_issued": "string | null",
-          "credential_id": "string | null" // If provided
+          "credential_id": "string | null"
       }}
-      // Add more certification objects
   ],
   "projects": [
       {{
           "name": "string | null",
           "description": "string | null",
-          "technologies_used": ["string"], // Specific tech for this project
-          "link": "string | null", // URL to the project if provided
-          "role": "string | null" // Candidate's role in the project if mentioned (e.g., "Lead Developer")
+          "technologies_used": ["string"],
+          "link": "string | null",
+          "role": "string | null"
       }}
-      // Add more project objects
   ],
-  "awards_recognition": ["string"], // List any awards or honors mentioned
+  "awards_recognition": ["string"],
   "publications_presentations": [
       {{
           "title": "string | null",
-          "venue_publication": "string | null", // e.g., Conference Name, Journal Name
+          "venue_publication": "string | null",
           "date": "string | null",
-          "link": "string | null" // URL if provided
+          "link": "string | null"
       }}
-      // Add more publication/presentation objects
   ]
 }}

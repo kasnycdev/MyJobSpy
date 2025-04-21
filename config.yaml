@@ -1,0 +1,27 @@
+# config.yaml
+# ... (existing SEARCH_SETTINGS, SCRAPING_OPTIONS, OUTPUT, PROXY sections) ...
+
+AI_PROCESSING:
+  ENABLED: true
+  OLLAMA_BASE_URL: "http://localhost:11434"
+  OLLAMA_MODEL: "deepseek-r1:14b" # Or your preferred model
+  RESUME_FILEPATH: "./resume/Kenneth.A.Santoro.MyJobSpy.Resume.pdf" # Or use command-line override
+  PROMPTS:
+    RESUME_EXTRACTION: "./prompts/resume_extraction.prompt"
+    JOB_SUITABILITY: "./prompts/job_suitability.prompt"
+
+# --- NEW SECTION ---
+USER_PROFILE:
+  DESIRED_SALARY_MIN: 180000  # Example: Your minimum desired salary
+  DESIRED_SALARY_MAX: 300000  # Example: Your maximum desired salary
+  MUST_HAVE_SKILLS:           # Example: Skills critical for you
+    - "Python"
+    - "Agile",
+    - "Team Leadership"
+    - "Kubernetes"
+    - "Incident Management"
+    - "Change Management"
+  PREFERRED_LOCATIONS:        # Example: Optional, could be used for filtering later
+    - "United States"
+    - "New York, NY"
+  # Add other preferences if needed (e.g., MUST_HAVE_BENEFITS)
