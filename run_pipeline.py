@@ -22,8 +22,9 @@ try:
     from analysis.analyzer import ResumeAnalyzer # Use the correct class name
     # --- END CORRECTION ---
 except ImportError as e:
+    # This error message itself confirms the import issue location
     print(f"CRITICAL ERROR: Could not import analysis functions from main_matcher or analyzer: {e}")
-    print("Ensure main_matcher.py and analysis/analyzer.py are in the correct path.")
+    print("Ensure main_matcher.py and analysis/analyzer.py are in the correct path and define the expected classes/functions.")
     sys.exit(1)
 
 import config # Central configuration
@@ -131,8 +132,8 @@ def print_summary_table(results_json: List[Dict[str, Any]], top_n: int = 10):
     for result in results_json:
         if count >= top_n: break
         analysis = result.get('analysis', {}); original = result.get('original_job_data', {})
-        score = analysis.get('suitability_score', -1) # Use -1 as default check, 0 is placeholder for fail
-        if score is None or score == 0: continue # Skip placeholder/failed entries
+        score = analysis.get('suitability_score', -1)
+        if score is None or score == 0: continue
         score_str = f"{score}%"
         table.add_row(score_str, original.get('title', 'N/A'), original.get('company', 'N/A'), original.get('location', 'N/A'), original.get('url', '#'))
         count += 1
@@ -200,7 +201,6 @@ def run_pipeline():
         if args.filter_remote_country: scrape_location = args.filter_remote_country.strip(); log.info(f"Using country '{scrape_location}' as primary scrape location (from --filter-remote-country).")
         elif args.filter_proximity_location: scrape_location = args.filter_proximity_location.strip(); log.info(f"Using proximity target '{scrape_location}' as primary scrape location.")
         elif args.location: scrape_location = args.location; log.info(f"Using provided --location '{scrape_location}' as primary scrape location.")
-        # No else needed due to validation
 
         # --- Step 1: Scrape Jobs ---
         scraper_sites = [site.strip().lower() for site in args.sites.split(',')]
@@ -221,7 +221,7 @@ def run_pipeline():
         if not jobs_list: log.error("Failed to convert or save scraped data. Pipeline halted."); sys.exit(1)
 
         # --- Step 3: Initialize Analyzer and Load Resume ---
-        try: analyzer = ResumeAnalyzer()
+        try: analyzer = ResumeAnalyzer() # Uses the correctly imported class name
         except Exception as e: log.critical(f"Failed to initialize ResumeAnalyzer: {e}.", exc_info=True); sys.exit(1)
 
         structured_resume = load_and_extract_resume(args.resume, analyzer)
