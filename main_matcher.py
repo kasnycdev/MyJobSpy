@@ -3,18 +3,17 @@ import logging
 import json
 import os
 import argparse
-import asyncio # Import asyncio
-from analysis.analyzer import ResumeAnalyzer # Correct class name
+import asyncio
+from analysis.analyzer import ResumeAnalyzer
 from typing import List, Dict, Any, Optional, Tuple
-from pathlib import Path # Use pathlib
+from pathlib import Path
+import time # Import time for progress updates
 
 from parsers.resume_parser import parse_resume
 from parsers.job_parser import load_job_mandates
-# Ensure correct Pydantic models are imported
 from analysis.models import ResumeData, AnalyzedJob, JobAnalysisResult
 from filtering.filter import apply_filters
-# Use CFG for configuration values loaded from YAML
-from config import CFG, DEFAULT_ANALYSIS_JSON # Import DEFAULT path too
+from config import CFG, DEFAULT_ANALYSIS_JSON
 
 log = logging.getLogger(__name__)
 
@@ -23,207 +22,132 @@ async def load_and_extract_resume(resume_path: str, analyzer: ResumeAnalyzer) ->
     """ASYNC Loads resume, parses text, and extracts structured data."""
     log.info(f"Processing resume file: {resume_path}")
     try:
-        # Run synchronous I/O in a thread pool executor
         loop = asyncio.get_running_loop()
         resume_text = await loop.run_in_executor(None, parse_resume, resume_path)
-    except FileNotFoundError:
-        log.error(f"Resume file not found at {resume_path}")
-        return None
-    except Exception as parse_err:
-         log.error(f"Error parsing resume file {resume_path}: {parse_err}", exc_info=True)
-         return None
-
-    if not resume_text: log.error("Failed to parse resume text."); return None
-
-    # Call the async extraction method
-    structured_resume_data = await analyzer.extract_resume_data(resume_text) # Await async call
+    except FileNotFoundError: log.error(f"Resume file not found: {resume_path}"); return None
+    except Exception as parse_err: log.error(f"Error parsing resume: {parse_err}", exc_info=True); return None
+    if not resume_text: log.error("Parsed empty resume text."); return None
+    structured_resume_data = await analyzer.extract_resume_data(resume_text)
     if not structured_resume_data: log.error("Failed to extract structured data from resume."); return None
-
     log.info("Successfully extracted structured data from resume.")
     return structured_resume_data
 
 
-# --- analyze_jobs (Corrected future mapping) ---
+# --- analyze_jobs (REVISED to use asyncio.gather WITH Rich Progress) ---
 async def analyze_jobs(
     analyzer: ResumeAnalyzer,
     structured_resume_data: ResumeData,
     job_list: List[Dict[str, Any]]
 ) -> List[AnalyzedJob]:
-    """ASYNC Analyzes a list of jobs against the resume data concurrently."""
+    """ASYNC Analyzes a list of jobs against the resume data concurrently with progress."""
     analyzed_results: list[AnalyzedJob] = []
     total_jobs = len(job_list)
     if total_jobs == 0:
          log.warning("No jobs provided for analysis.")
          return []
-    log.info(f"Starting ASYNC analysis of {total_jobs} jobs...")
+    log.info(f"Starting ASYNC analysis of {total_jobs} jobs using asyncio.gather...")
 
-    # --- MODIFICATION: Store future -> job_dict mapping ---
-    tasks_map: Dict[asyncio.Task, Dict[str, Any]] = {}
-    for job_dict in job_list:
-        # Create task and store it in the map with the job_dict as value
-        task = asyncio.create_task(analyzer.analyze_suitability(structured_resume_data, job_dict))
-        tasks_map[task] = job_dict
-    # --- END MODIFICATION ---
-
-    # Get the set of futures to wait for
-    futures = tasks_map.keys()
-
-    # Process tasks as they complete with Rich progress
-    processed_count = 0
+    # Try to import Rich Progress
     try:
-        # Use Rich progress bar if available
         from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, TimeElapsedColumn, TaskID
         RICH_PROGRESS_AVAILABLE = True
     except ImportError:
         RICH_PROGRESS_AVAILABLE = False
-        log.warning("Rich progress bar unavailable for async analysis.")
+        log.warning("Rich progress bar unavailable for async analysis. Using basic logging.")
 
-    async def _process_tasks_rich():
-        nonlocal processed_count, analyzed_results # Allow modification
-        with Progress( SpinnerColumn(), TextColumn("[progress.description]{task.description}"), BarColumn(),
-                       TextColumn("[progress.percentage]{task.percentage:>3.0f}%"), TimeElapsedColumn(), transient=False, ) as progress:
+    async def analyze_single_job_with_placeholder(job_dict):
+        """Wrapper to call analyze_suitability and return placeholder on error/None."""
+        job_title = job_dict.get('title', 'N/A')
+        try:
+            analysis_result = await analyzer.analyze_suitability(structured_resume_data, job_dict)
+            if not analysis_result:
+                log.warning(f"Analysis failed for job: {job_title}")
+                analysis_result = JobAnalysisResult(suitability_score=0, justification="Analysis failed/skipped.",
+                                                    skill_match=None, experience_match=None, qualification_match=None,
+                                                    salary_alignment="N/A", benefit_alignment="N/A", missing_keywords=[])
+            return AnalyzedJob(original_job_data=job_dict, analysis=analysis_result)
+        except Exception as task_exc:
+            log.error(f"Error processing analysis task for job '{job_title}': {task_exc}", exc_info=True)
+            # Return a placeholder AnalyzedJob object on unexpected task error
+            failed_analysis = JobAnalysisResult(suitability_score=0, justification=f"Task Error: {type(task_exc).__name__}",
+                                                skill_match=None, experience_match=None, qualification_match=None,
+                                                salary_alignment="N/A", benefit_alignment="N/A", missing_keywords=[])
+            return AnalyzedJob(original_job_data=job_dict, analysis=failed_analysis)
+
+
+    if RICH_PROGRESS_AVAILABLE:
+        with Progress(
+            SpinnerColumn(), TextColumn("[progress.description]{task.description}"), BarColumn(),
+            TextColumn("[progress.percentage]{task.percentage:>3.0f}%"), TimeElapsedColumn(), transient=False,
+        ) as progress:
             analysis_task_id: TaskID = progress.add_task("[cyan]Analyzing jobs...", total=total_jobs)
 
-            # Use asyncio.as_completed with the set of futures
-            for future in asyncio.as_completed(futures):
-                # --- MODIFICATION: Get job_dict directly from map ---
-                original_job_dict = tasks_map.get(future) # Retrieve using the completed future as key
-                # --- END MODIFICATION ---
+            # Create coroutines directly
+            coroutines = [analyze_single_job_with_placeholder(job_dict) for job_dict in job_list]
 
-                job_title = original_job_dict.get('title', 'N/A') if original_job_dict else "Unknown Job (Error mapping future!)"
+            # --- Process with gather, updating progress manually ---
+            results_list = []
+            tasks = [asyncio.create_task(coro) for coro in coroutines]
+            for future in asyncio.as_completed(tasks):
+                result = await future # Get result (which is now an AnalyzedJob or placeholder)
+                results_list.append(result)
+                progress.update(analysis_task_id, advance=1) # Update progress as each task finishes
 
-                try:
-                    # Await the future to get the result or raise exception
-                    analysis_result = await future
-                    if not analysis_result:
-                        log.warning(f"Analysis failed for job: {job_title}")
-                        # Create placeholder with score 0 - ensure this doesn't cause validation error
-                        analysis_result = JobAnalysisResult(suitability_score=0, justification="Analysis failed/skipped.",
-                                                            skill_match=None, experience_match=None, qualification_match=None,
-                                                            salary_alignment="N/A", benefit_alignment="N/A", missing_keywords=[])
+            analyzed_results = results_list # The results from gather are already AnalyzedJob objects
 
-                    # --- Ensure original_job_dict is valid before creating AnalyzedJob ---
-                    if original_job_dict:
-                        analyzed_job = AnalyzedJob(original_job_data=original_job_dict, analysis=analysis_result)
-                        analyzed_results.append(analyzed_job)
-                    else:
-                        # Log error if mapping failed
-                        log.error(f"Could not find original job data for a completed analysis task! Title: {job_title}")
+    else: # Fallback without rich progress bar
+        log.info(f"Analyzing {total_jobs} jobs (basic progress)...")
+        coroutines = [analyze_single_job_with_placeholder(job_dict) for job_dict in job_list]
+        # Run all tasks concurrently and wait for all to complete
+        analyzed_results = await asyncio.gather(*coroutines)
+        # Log completion (results are already AnalyzedJob objects)
+        log.info("Basic analysis processing complete.")
 
-                except Exception as task_exc:
-                     # Catch errors from await future or creating AnalyzedJob
-                     log.error(f"Error processing analysis task for job '{job_title}': {task_exc}", exc_info=True)
-                     # Optionally append a placeholder with error status if needed downstream
-                     # if original_job_dict:
-                     #    failed_analysis = JobAnalysisResult(suitability_score=0, justification=f"Task Error: {task_exc}", ...)
-                     #    analyzed_results.append(AnalyzedJob(original_job_data=original_job_dict, analysis=failed_analysis))
 
-                finally:
-                     processed_count += 1
-                     progress.update(analysis_task_id, advance=1)
-
-    async def _process_tasks_basic():
-         nonlocal processed_count, analyzed_results
-         for future in asyncio.as_completed(futures):
-             # --- MODIFICATION: Get job_dict directly from map ---
-             original_job_dict = tasks_map.get(future)
-             # --- END MODIFICATION ---
-             job_title = original_job_dict.get('title', 'N/A') if original_job_dict else "Unknown Job (Error mapping future!)"
-
-             if processed_count % 20 == 0 or processed_count == total_jobs -1: # Log progress occasionally
-                log.info(f"Analyzing job {processed_count+1}/{total_jobs} ('{job_title}')...")
-
-             try:
-                analysis_result = await future
-                if not analysis_result:
-                    log.warning(f"Analysis failed for job: {job_title}")
-                    analysis_result = JobAnalysisResult(suitability_score=0, justification="Analysis failed/skipped.",
-                                                        skill_match=None, experience_match=None, qualification_match=None,
-                                                        salary_alignment="N/A", benefit_alignment="N/A", missing_keywords=[])
-
-                # --- Ensure original_job_dict is valid ---
-                if original_job_dict:
-                    analyzed_job = AnalyzedJob(original_job_data=original_job_dict, analysis=analysis_result)
-                    analyzed_results.append(analyzed_job)
-                else:
-                     log.error(f"Could not find original job data for a completed analysis task! Title: {job_title}")
-
-             except Exception as task_exc:
-                log.error(f"Error processing analysis task for job '{job_title}': {task_exc}", exc_info=True)
-             finally:
-                processed_count += 1
-
-    # Run the appropriate processing function
-    if RICH_PROGRESS_AVAILABLE:
-         await _process_tasks_rich()
-    else:
-         await _process_tasks_basic()
-
-    log.info(f"Async analysis complete. Processed {processed_count}/{total_jobs} jobs. Successfully generated {len(analyzed_results)} analysis results.")
+    successful_analyses = sum(1 for res in analyzed_results if res.analysis and res.analysis.suitability_score > 0)
+    log.info(f"Async analysis complete. Processed {len(analyzed_results)}/{total_jobs} jobs. Generated {successful_analyses} successful analysis results.")
     return analyzed_results
 
 
-# --- apply_filters_sort_and_save function (Keep previous version with min_score filter) ---
+# --- apply_filters_sort_and_save (Keep as is - already handles score filtering) ---
 def apply_filters_sort_and_save(
     analyzed_results: List[AnalyzedJob],
     output_path: str,
-    filter_args: Dict[str, Any] # Combined dict of all filter criteria
+    filter_args: Dict[str, Any]
 ) -> List[Dict[str, Any]]:
     """Applies filters (including min score), sorts, and saves results."""
-    min_score = filter_args.pop('min_score', 0) # Extract min_score, default 0
-
-    # 1. Apply standard/location/custom filters first
+    # ... (Keep the exact implementation from previous response) ...
+    min_score = filter_args.pop('min_score', 0) # Default min_score to 0 if not present
     jobs_to_filter = [res.original_job_data for res in analyzed_results]
-    standard_filter_args = filter_args # Use remaining args
-
+    standard_filter_args = filter_args
     if standard_filter_args:
         log.info("Applying standard/location/custom filters...")
-        # Ensure apply_filters handles the new args like filter_companies etc.
         filtered_original_jobs = apply_filters(jobs_to_filter, **standard_filter_args)
         log.info(f"{len(filtered_original_jobs)} jobs passed standard filters.")
-        # Map back using a key (URL or composite)
         filtered_keys = set()
-        for job in filtered_original_jobs:
-             key = (job.get('url', job.get('job_url')), job.get('title'), job.get('company'), job.get('location'))
-             filtered_keys.add(key)
+        for job in filtered_original_jobs: key = (job.get('url', job.get('job_url')), job.get('title'), job.get('company'), job.get('location')); filtered_keys.add(key)
         intermediate_filtered_results = []
         for res in analyzed_results:
-             original_job = res.original_job_data
-             key = (original_job.get('url', original_job.get('job_url')), original_job.get('title'), original_job.get('company'), original_job.get('location'))
+             original_job = res.original_job_data; key = (original_job.get('url', original_job.get('job_url')), original_job.get('title'), original_job.get('company'), original_job.get('location'))
              if key in filtered_keys: intermediate_filtered_results.append(res)
-    else:
-        intermediate_filtered_results = analyzed_results # No standard filters
-
-    # 2. Apply minimum score filter
+    else: intermediate_filtered_results = analyzed_results
     log.info(f"Applying minimum score filter (>= {min_score})...")
-    # Make sure suitability_score exists and is not None before comparing
-    score_filtered_results = [
-        res for res in intermediate_filtered_results
-        if res.analysis and res.analysis.suitability_score is not None and res.analysis.suitability_score >= min_score
-    ]
+    score_filtered_results = [ res for res in intermediate_filtered_results if res.analysis and res.analysis.suitability_score is not None and res.analysis.suitability_score >= min_score ]
     log.info(f"{len(score_filtered_results)} jobs passed minimum score filter.")
     final_filtered_results = score_filtered_results
-
-    # 3. Sort the final filtered results
     log.info("Sorting final results by suitability score...")
-    final_filtered_results.sort(
-        key=lambda x: x.analysis.suitability_score if x.analysis and x.analysis.suitability_score is not None else 0,
-        reverse=True )
-
-    # 4. Convert and Save
+    final_filtered_results.sort( key=lambda x: x.analysis.suitability_score if x.analysis and x.analysis.suitability_score is not None else 0, reverse=True )
     final_results_json = [result.model_dump(mode='json') for result in final_filtered_results]
-    output_path_obj = Path(output_path) # Use pathlib consistently
-    output_dir = output_path_obj.parent
+    output_path_obj = Path(output_path); output_dir = output_path_obj.parent
     if output_dir: output_dir.mkdir(parents=True, exist_ok=True)
     try:
         with open(output_path_obj, 'w', encoding='utf-8') as f: json.dump(final_results_json, f, indent=4)
         log.info(f"Successfully saved {len(final_results_json)} final jobs to {output_path_obj}")
-    except Exception as e:
-        log.error(f"Error writing output file {output_path_obj}: {e}", exc_info=True)
-
+    except Exception as e: log.error(f"Error writing output file {output_path_obj}: {e}", exc_info=True)
     return final_results_json
 
-# --- Main execution block (async runner - Keep as is) ---
+
+# --- Main execution block (async runner - unchanged) ---
 async def async_main(args):
     # ... (Keep previous async_main logic) ...
     log.info("Starting standalone ASYNC analysis process...")
@@ -233,13 +157,12 @@ async def async_main(args):
         structured_resume = await load_and_extract_resume(args.resume, analyzer)
         if not structured_resume: log.error("Exiting: resume processing failure."); return
         log.info(f"Loading jobs from JSON file: {args.jobs}")
-        try:
-             loop = asyncio.get_running_loop(); job_list = await loop.run_in_executor(None, load_job_mandates, args.jobs)
+        try: loop = asyncio.get_running_loop(); job_list = await loop.run_in_executor(None, load_job_mandates, args.jobs)
         except FileNotFoundError: log.error(f"Jobs file not found: {args.jobs}"); return
         except Exception as e: log.error(f"Error loading jobs JSON: {e}"); return
         if not job_list: log.error("No jobs loaded. Exiting."); return
 
-        analyzed_results = await analyze_jobs(analyzer, structured_resume, job_list)
+        analyzed_results = await analyze_jobs(analyzer, structured_resume, job_list) # Await the gather call
 
         filter_args_dict = {}
         # Populate filter_args_dict including all new filters
@@ -266,10 +189,12 @@ async def async_main(args):
          if analyzer and hasattr(analyzer, 'close'): await analyzer.close()
     log.info("Standalone analysis finished.")
 
+
 def main():
     """Parses args and runs the async main function."""
-    # --- Argument Parsing (Keep all filters defined) ---
+    # --- Argument Parsing (Unchanged) ---
     parser = argparse.ArgumentParser(description="Analyze pre-existing job JSON against a resume.")
+    # ... (keep all arguments) ...
     parser.add_argument("--resume", required=True, help="Path to resume file.")
     parser.add_argument("--jobs", required=True, help="Path to jobs JSON file.")
     parser.add_argument("--output", default=str(DEFAULT_ANALYSIS_JSON), help="Output JSON file path.")
@@ -288,8 +213,10 @@ def main():
     parser.add_argument("--filter-proximity-location", help="Reference location for proximity.")
     parser.add_argument("--filter-proximity-range", type=float, help="Distance in miles for proximity.")
     parser.add_argument("--filter-proximity-models", default="Hybrid,On-site", help="Work models for proximity.")
+    parser.add_argument("--force-resume-reparse", action="store_true", help="Ignore cached resume data.")
 
     args = parser.parse_args()
+    # --- Logging setup unchanged ---
     log_level = logging.DEBUG if args.verbose else CFG.get('logging', {}).get('level', 'INFO').upper()
     try: logging.getLogger().setLevel(log_level)
     except ValueError: log.error(f"Invalid log level: {log_level}. Using INFO."); logging.getLogger().setLevel(logging.INFO)
