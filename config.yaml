@@ -1,44 +1,90 @@
-# config.yaml
+# ==================================================
 # Default Configuration for MyJobSpy Analyst
+# ==================================================
+# This file defines default settings.
+# Settings can be overridden by environment variables where noted (e.g., OLLAMA_MODEL).
 
-# Ollama Settings
+# --- Ollama LLM Settings ---
 ollama:
-  base_url: "http://localhost:11434"
-  model: "llama3:instruct"
+  # Base URL of your running Ollama instance
+  base_url: "http://localhost:11434" # Can be overridden by OLLAMA_BASE_URL env var
+
+  # Default LLM model to use for analysis (MUST be pulled in Ollama)
+  model: "llama3:instruct"          # Can be overridden by OLLAMA_MODEL env var
+
+  # Timeout in seconds for individual requests to the Ollama API
   request_timeout: 450
+
+  # Maximum number of retries if an Ollama API call fails (e.g., timeout, network error)
   max_retries: 2
+
+  # Base delay in seconds for the first retry (subsequent retries use exponential backoff)
   retry_delay: 5
+
+  # Approximate maximum number of characters for the combined prompt data
+  # (Resume JSON + Job JSON + Prompt Template Text) sent for SUITABILITY analysis.
+  # Helps prevent context window overflows or excessively long processing times.
+  # Tune based on your chosen model's context window and system memory.
   max_prompt_chars: 24000
 
-# Prompt File Locations (relative to project root)
+# --- Prompt File Locations ---
+# Specifies where the LLM prompt template files are located, relative to the project root.
 prompts:
   directory: "analysis/prompts"
   resume_extraction_file: "resume_extraction.prompt"
-  suitability_analysis_file: "suitability_analysis.prompt" # Make sure this matches actual filename used
+  # Make sure this filename matches the actual prompt file you created/are using
+  suitability_analysis_file: "suitability_analysis.prompt"
 
-# JobSpy Scraping Defaults
+# --- JobSpy Scraping Defaults ---
+# These values are used if the corresponding command-line arguments are NOT provided.
 scraping:
+  # Default sites to scrape if --sites argument is omitted.
+  # Check JobSpy documentation for currently supported/reliable sites.
+  # Example: ["linkedin", "indeed", "zip_recruiter"]
   default_sites: ["linkedin", "indeed"]
+
+  # Default approximate number of job results to aim for *per site*.
   default_results_limit: 25
+
+  # Default maximum age of jobs in hours (e.g., 72 for last 3 days).
+  # Set to 0 to disable this filter during scraping.
   default_hours_old: 72
+
+  # Default country code specifically for Indeed searches (affects Indeed results region).
+  # Common values: "usa", "ca", "uk", "de", "fr", "au", etc.
   default_country_indeed: "usa"
 
-# Geocoding Settings
+# --- Geocoding Settings (for Advanced Location Filtering) ---
 geocoding:
-  # IMPORTANT: Change this or set GEOPY_USER_AGENT env var
+  # !! IMPORTANT !! Required by Nominatim service.
+  # Replace with a unique identifier for your application and your contact email.
+  # Format: "AppName/Version (your_email@example.com)"
+  # Can be overridden by GEOPY_USER_AGENT environment variable.
   user_agent: "MyJobSpyAnalysisBot/1.0 (your_email@example.com)"
+
+  # Path relative to the project root where the geocoding cache (successes/failures) will be stored.
   cache_file: "output/.geocode_cache.json"
 
-# Caching Settings
+# --- Caching Settings ---
 caching:
+  # Directory relative to the project root where structured resume data (JSON) will be cached.
+  # Files are named based on the resume file's content hash.
   resume_cache_dir: "output/.resume_cache"
 
-# Output Defaults
+# --- Output Defaults ---
 output:
+  # Default directory relative to the project root where output files are saved.
   directory: "output"
+
+  # Default filename for the intermediate JSON file containing raw scraped jobs.
   scraped_json_filename: "scraped_jobs.json"
+
+  # Default filename for the final JSON file containing analyzed and filtered jobs.
   analysis_json_filename: "analyzed_jobs.json"
 
-# Logging
+# --- Logging Settings ---
 logging:
-  level: "INFO" # Default level (INFO, DEBUG, WARNING, ERROR)
+  # Default logging level. Options: DEBUG, INFO, WARNING, ERROR, CRITICAL.
+  # Can be overridden by the -v/--verbose command-line flag (sets to DEBUG).
+  # Can be overridden by LOG_LEVEL environment variable.
+  level: "INFO"
