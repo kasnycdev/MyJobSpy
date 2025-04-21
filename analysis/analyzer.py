@@ -107,13 +107,13 @@ class ResumeAnalyzer:
                     self._pull_model_with_progress(target_model)
                     # Re-verify after pulling
                     log.info("Re-fetching model list after pull attempt...")
-                    time.sleep(2) # Give Ollama a moment to register
+                    time.sleep(5) # Give Ollama a moment to register
                     updated_list = self.sync_client.list().get('models', [])
                     updated_names = [m.model for m in updated_list if hasattr(m, 'model')]
                     log.debug(f"Model list after pull: {updated_names}")
                     if target_model not in updated_names:
                          # Try final check with slight delay
-                         time.sleep(3)
+                         time.sleep(10)
                          final_list = self.sync_client.list().get('models', [])
                          final_names = [m.model for m in final_list if hasattr(m, 'model')]
                          if target_model not in final_names:
