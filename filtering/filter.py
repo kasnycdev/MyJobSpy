@@ -30,9 +30,9 @@ else:
 _geocode_cache = {}
 _geocode_fail_cache = set()
 
+# --- get_lat_lon_country function remains unchanged ---
 def get_lat_lon_country(location_str: str) -> Optional[tuple[float, float, str]]:
-    """Geocodes a location string using Nominatim with caching and rate limiting."""
-    # (Function content remains the same as previous correct version)
+    # (Content of this function remains the same as previous correct version)
     if not GEOPY_AVAILABLE or not GEOCODER or not location_str: return None
     normalized_loc = location_str.lower().strip();
     if not normalized_loc: return None
@@ -108,26 +108,17 @@ def apply_filters(
             elif salary_passes_check and log.isEnabledFor(logging.DEBUG): log.debug(f"PASSED (Salary Max): No job salary data for '{job_title}'")
         if not salary_passes_check: passes_all_filters = False; continue
 
-        # Work Model (Standard)
+        # Work Model (Standard) - CORRECTED BLOCK
         if normalized_work_models:
              job_model = normalize_string(job.get('work_model')) or normalize_string(job.get('remote'))
-             # --- CORRECTED INFERENCE BLOCK ---
-             if not job_model: # Infer if possible
+             if not job_model:
                   job_loc_wm = normalize_string(job.get('location'))
-                  if 'remote' in job_loc_wm:
-                      job_model = 'remote'
-                  elif 'hybrid' in job_loc_wm:
-                      job_model = 'hybrid'
-                  elif 'on-site' in job_loc_wm or 'office' in job_loc_wm:
-                      job_model = 'on-site'
-                  else:
-                      job_model = None # Explicitly None if no match
-             # --- END CORRECTION ---
-
+                  if 'remote' in job_loc_wm: job_model = 'remote'
+                  elif 'hybrid' in job_loc_wm: job_model = 'hybrid'
+                  elif 'on-site' in job_loc_wm or 'office' in job_loc_wm: job_model = 'on-site'
+                  else: job_model = None
              if not job_model or job_model not in normalized_work_models:
-                  passes_all_filters = False
-                  log.debug(f"FILTERED (Work Model): '{job_title}' ({job_url}). Job model '{job_model}' not in {normalized_work_models}")
-                  continue # Skip to next job
+                  passes_all_filters = False; log.debug(f"FILTERED (Work Model): '{job_title}' ({job_url}). Job model '{job_model}' not in {normalized_work_models}"); continue
 
         # Job Type
         if passes_all_filters and normalized_job_types:
@@ -153,17 +144,34 @@ def apply_filters(
         # Filter 2: Proximity
         if passes_all_filters and filter_proximity_location and target_lat_lon:
             job_model_prox = normalize_string(job.get('work_model')) or normalize_string(job.get('remote')); loc_text_prox = normalize_string(job_location_str)
-            if not job_model_prox:
-                 if 'remote' in loc_text_prox: job_model_prox = 'remote'; elif 'hybrid' in loc_text_prox: job_model_prox = 'hybrid'; elif 'on-site' in loc_text_prox or 'office' in loc_text_prox: job_model_prox = 'on-site'
-            if not job_model_prox or job_model_prox not in normalized_proximity_models: passes_all_filters = False; log.debug(f"FILTERED (Proximity Model): '{job_title}' ({job_url}). Model '{job_model_prox}' not in {normalized_proximity_models}")
+            # --- CORRECTED INFERENCE BLOCK ---
+            if not job_model_prox: # Infer if possible
+                 if 'remote' in loc_text_prox:
+                     job_model_prox = 'remote'
+                 elif 'hybrid' in loc_text_prox:
+                     job_model_prox = 'hybrid'
+                 elif 'on-site' in loc_text_prox or 'office' in loc_text_prox:
+                     job_model_prox = 'on-site'
+                 else:
+                     job_model_prox = None # Explicitly None if no match
+            # --- END CORRECTION ---
+            if not job_model_prox or job_model_prox not in normalized_proximity_models:
+                 passes_all_filters = False
+                 log.debug(f"FILTERED (Proximity Model): '{job_title}' ({job_url}). Model '{job_model_prox}' not allowed ({normalized_proximity_models}) for proximity filter.")
+                 continue # Skip this job
             else:
+                 # Proceed with geocoding and distance check only if model matches
                  if not job_geo_result: job_geo_result = get_lat_lon_country(job_location_str)
                  if not job_geo_result: passes_all_filters = False; log.debug(f"FILTERED (Proximity Geocode Fail): Could not geocode '{job_location_str}' for '{job_title}' ({job_url}).")
                  else:
                       job_lat_lon = (job_geo_result[0], job_geo_result[1])
-                      distance_miles = geodesic(target_lat_lon, job_lat_lon).miles
-                      log.debug(f"Proximity check for '{job_title}' ({job_url}): Dist={distance_miles:.1f}mi from '{filter_proximity_location}'.")
-                      if distance_miles > filter_proximity_range: passes_all_filters = False; log.debug(f"FILTERED (Proximity Range): Dist {distance_miles:.1f} > range {filter_proximity_range}mi for '{job_title}' ({job_url})")
+                      try:
+                          distance_miles = geodesic(target_lat_lon, job_lat_lon).miles
+                          log.debug(f"Proximity check for '{job_title}' ({job_url}): Dist={distance_miles:.1f}mi from '{filter_proximity_location}'.")
+                          if distance_miles > filter_proximity_range: passes_all_filters = False; log.debug(f"FILTERED (Proximity Range): Dist {distance_miles:.1f} > range {filter_proximity_range}mi for '{job_title}' ({job_url})")
+                      except Exception as dist_err: # Catch potential errors in geodesic calculation
+                           log.warning(f"Could not calculate distance between {target_lat_lon} and {job_lat_lon} for '{job_title}': {dist_err}")
+                           passes_all_filters = False # Filter out if distance calculation fails
             if not passes_all_filters: continue
 
         # --- Final Decision ---
