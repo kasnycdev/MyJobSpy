@@ -4,10 +4,10 @@ import json
 import logging
 from typing import Dict, Any, Optional, List
 # --- MODIFIED IMPORT ---
-from ..models.models import JobAnalysisResult, KeywordAnalysis, MatchDetails # Import updated Pydantic models
+from models.models import JobAnalysisResult, KeywordAnalysis, MatchDetails # Import updated Pydantic models
 # --- END MODIFIED IMPORT ---
 from datetime import datetime
-import os # Added os import for path check
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +52,7 @@ class JobAnalyzer:
         logger.info("Requesting resume data extraction from LLM...")
         logger.debug(f"Sending request to Ollama model {self.model_name}. Prompt length: {len(prompt)} chars.")
 
+        content = "<LLM Response not captured>" # Default value
         try:
             response = self.client.chat(
                 model=self.model_name,
@@ -68,7 +69,6 @@ class JobAnalyzer:
 
         except json.JSONDecodeError as e:
             logger.error(f"Failed to decode JSON response from Ollama for resume extraction: {e}")
-            content = content if 'content' in locals() else '<Response content not captured>'
             logger.error(f"LLM response content was: {content}")
             return None
         except Exception as e:
@@ -86,6 +86,7 @@ class JobAnalyzer:
 
         try:
             structured_resume_json = json.dumps(structured_resume, indent=2)
+            # Use default=str for dates that might not be JSON serializable otherwise
             job_details_json = json.dumps(job_details, indent=2, default=str)
         except Exception as json_err:
             logger.error(f"Failed to serialize input data to JSON for LLM prompt: {json_err}", exc_info=True)
@@ -105,6 +106,7 @@ class JobAnalyzer:
         logger.info(f"Requesting suitability analysis from LLM for job: {job_title}")
         logger.debug(f"Sending request to Ollama model {self.model_name}. Prompt length: {len(prompt)} chars.")
 
+        content = "<LLM Response not captured>" # Default value
         try:
             response = self.client.chat(
                 model=self.model_name,
@@ -150,9 +152,8 @@ class JobAnalyzer:
 
         except json.JSONDecodeError as e:
             logger.error(f"Failed to decode JSON response from Ollama for job analysis '{job_title}': {e}")
-            content = content if 'content' in locals() else '<Response content not captured>'
             logger.error(f"LLM response content was: {content}")
-            return None
+            return None # Return None on failure
         except Exception as e:
             logger.error(f"Error during suitability analysis for job '{job_title}': {e}", exc_info=True)
             return None

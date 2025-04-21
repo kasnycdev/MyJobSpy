@@ -56,8 +56,8 @@ def scrape_jobs_with_jobspy(
             hours_old=hours_old,
             country_indeed=country_indeed,
             offset=offset,
-            linkedin_company_ids=None,
-            linkedin_fetch_description=True# Ensure this is None or omitted
+            linkedin_company_ids=None,# Ensure this is None or omitted
+            linkedin_fetch_description=True
         )
         if jobs_df is not None and not jobs_df.empty:
             logger.info(f"Jobspy scraping successful. Found {len(jobs_df)} jobs.")
