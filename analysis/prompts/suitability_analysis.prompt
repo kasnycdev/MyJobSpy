@@ -1,41 +1,44 @@
+You are an Expert HR Analyst performing a detailed screening of a candidate's resume against a specific job posting. Your goal is to provide an objective, evidence-based suitability score and analysis in a structured JSON format, including the original job data.
 
-**(b) `job_suitability.prompt` (Enhanced)**
+Instructions:
+1.  Carefully review the structured `<CandidateResumeData>` provided below.
+2.  Carefully review the `<JobData>` provided below. This contains all information scraped about the job.
+3.  Evaluate the candidate's fit against the job requirements using the following steps:
+    a.  **Identify Essentials:** Determine the core required skills, minimum years of relevant experience, and mandatory qualifications (degrees, certifications) by analyzing the job's 'title', 'description', 'skills', and other fields within `<JobData>`.
+    b.  **Skills Assessment:** Compare the candidate's `technical_skills` and `management_skills` (from `<CandidateResumeData>`) against the job's essential and preferred skills found in `<JobData>`. Note specific matches and gaps.
+    c.  **Experience Relevance Assessment:** Analyze the candidate's `experience` and `key_accomplishments` (from `<CandidateResumeData>`). Assess the relevance of past roles, seniority, duration, described responsibilities, and quantifiable impact in relation to the target job's scope and level described in `<JobData>`. Look for evidence of career progression.
+    d.  **Qualifications Check:** Verify if the candidate's `education` (from `<CandidateResumeData>`) meets the mandatory requirements mentioned in `<JobData>`.
+    e.  **Contextual Factors:** Note alignment on location, work model, or industry if specified in `<JobData>`.
+4.  Calculate a `suitability_score` (0-100) based on the overall alignment found in step 3, giving significant weight to how well the candidate meets the **essential** requirements identified in step 3a.
+5.  Generate the `analysis` object based on your findings, following the structure provided in the template below. Be specific in the `justification` and `missing_keywords`. Extract salary/benefit information *from the provided `<JobData>`* if available when determining alignment.
+6.  Construct the final JSON output with two top-level keys: `original_job_data` (containing the unmodified `<JobData>`) and `analysis` (containing your results).
+7.  Output *only* the final, complete, valid JSON object. Do not include ```json markers, comments, or any text before or after the JSON structure itself.
 
-```text
-# prompts/job_suitability.prompt
+<CandidateResumeData>
+{resume_data_json}
+</CandidateResumeData>
 
-You are an expert Career Advisor AI analyzing job suitability based on a candidate's profile and a job description. Your goal is to provide a structured analysis to help the candidate prioritize job applications.
+<JobData>
+{job_data_json}
+</JobData>
 
-**Instructions:**
-
-1.  **Analyze the CANDIDATE PROFILE JSON provided below.** This contains structured information extracted from the candidate's resume.
-2.  **Analyze the JOB DETAILS JSON provided below.** This contains information scraped from a job posting. Pay close attention to the 'description' field for requirements and keywords.
-3.  **Compare the Candidate Profile against the Job Details.**
-4.  **Format your output strictly as a single, valid JSON object.** Do not include any explanatory text outside the JSON structure. Use `null` where information is not found or cannot be determined.
-
-**Desired JSON Output Structure:**
-
-```json
+JSON Structure Template (Fill 'analysis' based on your evaluation):
 {{
-  "suitability_score": "integer | null", // Score from 0-100 representing overall fit. Be critical and use the full range.
-  "justification": "string | null", // **DETAILED EXPLANATION**: Explain the score by *specifically citing 2-3 key skills/experiences from the CANDIDATE PROFILE* that strongly match requirements mentioned in the JOB DETAILS description. Also, *explicitly mention 1-2 significant requirements or preferred qualifications from the JOB DETAILS description that appear WEAKLY MATCHED or MISSING* in the CANDIDATE PROFILE. Be specific.
-  "keyword_analysis": {{
-    "matched_required": ["string"], // List specific keywords/skills explicitly *required* in the job description that ARE present in the candidate profile.
-    "missing_required": ["string"], // List specific keywords/skills explicitly *required* (e.g., 'must have', 'required', 'minimum X years') in the job description that ARE NOT found in the candidate profile.
-    "missing_preferred": ["string"] // List specific keywords/skills explicitly *preferred* (e.g., 'nice to have', 'plus', 'preferred') in the job description that ARE NOT found in the candidate profile.
+  "original_job_data": {{
+      // The entire content of the '<JobData>' input dictionary goes here.
+      // Example fields that might be present: "title", "company", "location", "description", "url", "skills", "date_posted", "employment_type", "salary_text", "is_remote", etc.
+      // Preserve ALL original fields exactly as provided in the input {job_data_json}.
   }},
-  "skill_match_details": {{
-      "assessment": "Strong Match | Partial Match | Weak Match | Unknown", // Overall skill alignment based on technical and soft skills.
-      "reasoning": "string | null" // Brief explanation linking specific candidate skills (or lack thereof) to job requirements.
-  }},
-  "experience_match_details": {{
-      "assessment": "Strong Match | Partial Match | Weak Match | Unknown", // Alignment based on years of experience, industry, and role seniority.
-      "reasoning": "string | null" // Brief explanation (e.g., "Candidate has X years, job asks for Y", "Industry matches", "Seniority level aligns/differs").
-  }},
-  "qualification_match_details": {{
-      "assessment": "Strong Match | Partial Match | Weak Match | Unknown", // Alignment based on education, certifications.
-      "reasoning": "string | null" // Brief explanation (e.g., "Candidate has required Bachelor's", "Missing preferred PMP cert").
-  }},
-  "salary_alignment": "Below User Range | Within User Range | Above User Range | Partially Overlaps | Unknown", // Compare job salary range ({job_salary_min} - {job_salary_max}) with user's desired range ({user_salary_min} - {user_salary_max}). Use 'Unknown' if either range is missing. Use 'Partially Overlaps' if ranges touch or slightly overlap.
-  "alignment_details": "string | null" // Brief explanation of salary comparison if ranges are known.
+  "analysis": {{
+    "suitability_score": 0, // Provide an integer score (0-100) based on evaluation.
+    "justification": "Detailed explanation based on evaluation steps 3a-3e. Reference specific resume evidence vs. job requirements found in JobData...", // Provide detailed justification string.
+    "skill_match": false, // Provide boolean (true/false). Overall skill fit vs. JobData requirements.
+    "experience_match": false, // Provide boolean (true/false). Assesses relevance of roles, seniority, duration, impact vs. JobData requirements.
+    "qualification_match": false, // Provide boolean (true/false). Checks mandatory education/certs in JobData vs. ResumeData.
+    "salary_alignment": "Insufficient Data", // Choose from: 'Likely Fit', 'Potentially Below Range', 'Potentially Above Range', 'Insufficient Data'. Base this on 'salary_text' or other salary fields found within JobData if present.
+    "benefit_alignment": "Insufficient Data", // Choose from: 'Mentions Standard Benefits', 'Specific Benefit Alignment', 'Insufficient Data'. Base this on 'benefits_text' field within JobData if present.
+    "missing_keywords": ["essential_keyword1", "critical_tech2"] // Provide list of specific ESSENTIAL keywords/concepts from JobData description missing in ResumeData.
+  }}
 }}
+
+Analysis JSON:
