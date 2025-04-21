@@ -1,262 +1,209 @@
-# run_pipeline.py
 import argparse
 import logging
 import json
 import os
 import sys
-import hashlib
-import traceback
-import asyncio
+import asyncio # Import asyncio
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 import pandas as pd
-from pathlib import Path
 
 # Use the jobspy library for scraping
-try: import jobspy; from jobspy import scrape_jobs
-except ImportError: print("CRITICAL ERROR: 'jobspy' library not found..."); sys.exit(1)
+try:
+    import jobspy
+    from jobspy import scrape_jobs
+except ImportError: print("CRITICAL ERROR: 'jobspy' library not found."); sys.exit(1)
 
 # Import analysis components
 try:
-    from main_matcher import load_and_extract_resume, analyze_jobs, apply_filters_sort_and_save
+    from main_matcher import load_and_extract_resume_async, analyze_jobs_async, apply_filters_sort_and_save # Use async versions
     from analysis.analyzer import ResumeAnalyzer
-    from analysis.models import ResumeData
 except ImportError as e: print(f"CRITICAL ERROR: Could not import analysis functions: {e}"); sys.exit(1)
-except Exception as e: print(f"CRITICAL ERROR during imports: {e}"); traceback.print_exc(); sys.exit(1)
 
-# Load configuration
-try: import config
-except Exception as e: print(f"CRITICAL ERROR: Failed to import config.py: {e}"); traceback.print_exc(); sys.exit(1)
+import config
 
 # Rich for UX
-try: from rich.console import Console; from rich.logging import RichHandler; from rich.table import Table; RICH_AVAILABLE = True
-except ImportError: RICH_AVAILABLE = False; print("Warning: 'rich' library not found...")
+from rich.console import Console
+from rich.logging import RichHandler
+from rich.table import Table
 
-# Setup logging
-log = logging.getLogger(__name__)
-log_level_str = config.CFG.get('logging', {}).get('level', 'INFO').upper() # Get level from config first
-if RICH_AVAILABLE:
-    logging.basicConfig(level=log_level_str, format="%(message)s", datefmt="[%X]", handlers=[RichHandler(rich_tracebacks=True, show_path=False)], force=True)
-    console = Console()
-else:
-     logging.basicConfig(level=log_level_str, format='%(asctime)s-%(levelname)s-%(message)s', datefmt='%Y-%m-%d %H:%M:%S', force=True)
+# Setup logging using Rich
+logging.basicConfig( level=config.LOG_LEVEL, format=config.LOG_FORMAT, datefmt=config.LOG_DATE_FORMAT, handlers=[RichHandler(rich_tracebacks=True, show_path=False)] )
 logging.getLogger("httpx").setLevel(logging.WARNING)
-logging.getLogger("urllib3").setLevel(logging.WARNING)
-if logging.getLogger().getEffectiveLevel() > logging.DEBUG: logging.getLogger("geopy").setLevel(logging.INFO)
+log = logging.getLogger(__name__)
+console = Console()
 
 
-# --- scrape_jobs_with_jobspy function (unchanged) ---
-def scrape_jobs_with_jobspy(search_terms, location, sites, results_wanted, hours_old, country_indeed, proxies=None, offset=0) -> Optional[pd.DataFrame]:
-    # ... (Keep previous version) ...
-    pass
-
-# --- convert_and_save_scraped function (unchanged) ---
-def convert_and_save_scraped(jobs_df: pd.DataFrame, output_path: Path) -> List[Dict[str, Any]]:
-    # ... (Keep previous version) ...
-    pass
-
-# --- print_summary_table function (unchanged) ---
-def print_summary_table(results_json: Optional[List[Dict[str, Any]]], top_n: int = 10):
-    # ... (Keep previous version) ...
-    pass
-
-# --- Resume Caching Helper ---
-def get_resume_hash(filepath: str) -> Optional[str]:
-    """Calculates SHA256 hash of a file's content."""
+# --- scrape_jobs_with_jobspy function remains synchronous ---
+def scrape_jobs_with_jobspy(
+    search_terms: str, location: str, sites: list[str], results_wanted: int, hours_old: int,
+    country_indeed: str, proxies: Optional[list[str]] = None, offset: int = 0
+    ) -> Optional[pd.DataFrame]:
+    # (Function content remains the same as previous version)
+    log.info(f"[bold blue]Starting job scraping via JobSpy...[/bold blue]")
+    log.info(f"Search: '[cyan]{search_terms}[/cyan]' | Location: '[cyan]{location}[/cyan]' | Sites: {sites}")
+    log.info(f"Params: Results ≈{results_wanted}, Max Age={hours_old}h, Indeed Country='{country_indeed}', Offset={offset}")
+    if proxies: log.info(f"Using {len(proxies)} proxies.")
     try:
-        hasher = hashlib.sha256()
-        with open(filepath, 'rb') as file:
-            while chunk := file.read(4096): hasher.update(chunk) # Walrus operator Py 3.8+
-        return hasher.hexdigest()
-    except FileNotFoundError: log.error(f"Resume file not found at {filepath} for hashing."); return None
-    except Exception as e: log.error(f"Error hashing resume file {filepath}: {e}", exc_info=True); return None
-
-# --- Main Execution Logic (Async Wrapper) ---
-async def async_pipeline_logic(args):
-    """The core logic wrapped in an async function."""
-    config.ensure_required_dirs() # Ensure output and cache dirs exist
-
-    # --- Determine scrape location ---
-    scrape_location = None
-    if args.filter_remote_country: scrape_location = args.filter_remote_country.strip(); log.info(f"Using country '{scrape_location}' as primary scrape location (from --filter-remote-country).")
-    elif args.filter_proximity_location: scrape_location = args.filter_proximity_location.strip(); log.info(f"Using proximity target '{scrape_location}' as primary scrape location.")
-    elif args.location: scrape_location = args.location; log.info(f"Using provided --location '{scrape_location}' as primary scrape location.")
-    # Validation ensures one is set
-
-    # --- Step 1: Scrape Jobs ---
-    log.info("--- Stage 1: Scraping Jobs ---")
-    scraper_sites = [site.strip().lower() for site in args.sites.split(',')]
-    proxy_list = [p.strip() for p in args.proxies.split(',')] if args.proxies else None
-    jobs_df = scrape_jobs_with_jobspy(
-        search_terms=args.search, location=scrape_location, sites=scraper_sites, results_wanted=args.results,
-        hours_old=args.hours_old, country_indeed=args.country_indeed, proxies=proxy_list, offset=args.offset )
-
-    if jobs_df is None or jobs_df.empty:
-        log.warning("Scraping yielded no results. Pipeline finished.")
-        # ... (handle empty analysis output file) ...
-        return # Exit async function
-
-    # --- Step 2: Convert and Save Scraped Data ---
-    log.info("--- Stage 2: Processing Scraped Data ---")
-    # Use Path object from config
-    scraped_jobs_path = config.PROJECT_ROOT / config.CFG['output']['directory'] / config.CFG['output']['scraped_json_filename']
-    jobs_list = convert_and_save_scraped(jobs_df, scraped_jobs_path)
-    if not jobs_list: raise RuntimeError("Failed to convert or save scraped data.")
-
-    # --- Step 3: Initialize Analyzer and Load/Cache Resume ---
-    log.info("--- Stage 3: Initializing Analyzer and Processing Resume ---")
-    analyzer: Optional[ResumeAnalyzer] = None
-    structured_resume: Optional[ResumeData] = None
-    try:
-        analyzer = ResumeAnalyzer() # Can raise errors during init/check
-
-        # --- Resume Caching Logic ---
-        resume_hash = get_resume_hash(args.resume)
-        cache_filepath = None
-        if resume_hash:
-             cache_filename = f"{resume_hash}.json"
-             cache_filepath = config.RESUME_CACHE_DIR / cache_filename # Use Path object from config
-             log.debug(f"Resume hash: {resume_hash}, Cache file path: {cache_filepath}")
-
-        if not args.force_resume_reparse and cache_filepath and cache_filepath.exists():
-            log.info(f"Loading structured resume data from cache: {cache_filepath}")
-            try:
-                with open(cache_filepath, 'r', encoding='utf-8') as f: cached_data_json = f.read()
-                structured_resume = ResumeData.model_validate_json(cached_data_json)
-                log.info("Successfully loaded resume data from cache.")
-            except Exception as e: log.warning(f"Failed to load resume from cache: {e}. Re-parsing.", exc_info=True); structured_resume = None
+        jobs_df = scrape_jobs( site_name=sites, search_term=search_terms, location=location, results_wanted=results_wanted, hours_old=hours_old, country_indeed=country_indeed, proxies=proxies, offset=offset, verbose=1, description_format="markdown", linkedin_fetch_description=True)
+        if jobs_df is None or jobs_df.empty: log.warning("Jobspy scraping returned no results or failed."); return None
         else:
-             if cache_filepath: log.info(f"Cache not found or --force-resume-reparse. Parsing resume...")
-             else: log.info("Resume hash failed, parsing resume...")
-             structured_resume = None # Ensure it's None if not loaded
+            log.info(f"Jobspy scraping successful. Found {len(jobs_df)} jobs.")
+            log.debug(f"DataFrame columns: {jobs_df.columns.tolist()}")
+            # Ensure essential columns exist for later processing, prevents KeyErrors
+            essential_scrape_cols = ['title', 'company', 'location', 'description', 'job_url', 'date_posted', 'job_type']
+            for col in essential_scrape_cols:
+                 if col not in jobs_df.columns:
+                     log.warning(f"Essential column '{col}' missing from JobSpy output, adding as empty.")
+                     jobs_df[col] = ''
+            return jobs_df
+    except ImportError as ie: log.critical(f"Import error during scraping: {ie}."); return None
+    except Exception as e: log.error(f"An error occurred during jobspy scraping: {e}", exc_info=True); return None
 
-        if not structured_resume: # If cache load failed or skipped
-            structured_resume = await load_and_extract_resume(args.resume, analyzer)
-            if structured_resume and cache_filepath: # Save to cache if parsing succeeded
-                try:
-                    with open(cache_filepath, 'w', encoding='utf-8') as f: f.write(structured_resume.model_dump_json(indent=2))
-                    log.info(f"Saved structured resume data to cache: {cache_filepath}")
-                except Exception as cache_e: log.warning(f"Failed to save resume cache: {cache_e}", exc_info=True)
-        # --- End Resume Caching Logic ---
 
-        if not structured_resume: raise RuntimeError("Failed to load and extract structured data from resume.")
+# --- convert_and_save_scraped function remains synchronous ---
+def convert_and_save_scraped(jobs_df: pd.DataFrame, output_path: str) -> List[Dict[str, Any]]:
+    # (Function content remains the same as previous version)
+    log.info(f"Converting DataFrame to list and saving to {output_path}")
+    rename_map = {'job_url': 'url','job_type': 'employment_type','salary': 'salary_text','benefits': 'benefits_text'}
+    actual_rename_map = {k: v for k, v in rename_map.items() if k in jobs_df.columns}; jobs_df = jobs_df.rename(columns=actual_rename_map)
+    possible_date_columns = ['date_posted', 'posted_date', 'date']
+    for col in possible_date_columns:
+        if col in jobs_df.columns:
+            if pd.api.types.is_datetime64_any_dtype(jobs_df[col]) or jobs_df[col].dtype == 'object':
+                 try: jobs_df[col] = pd.to_datetime(jobs_df[col], errors='coerce'); jobs_df[col] = jobs_df[col].dt.strftime('%Y-%m-%d')
+                 except Exception: jobs_df[col] = jobs_df[col].astype(str)
+    essential_cols = ['title','company','location','description','url','salary_text','employment_type','benefits_text','skills','date_posted']
+    for col in essential_cols:
+         if col not in jobs_df.columns: log.warning(f"Column '{col}' missing, adding empty."); jobs_df[col] = ''
+    jobs_df = jobs_df.fillna(''); jobs_list = jobs_df.to_dict('records')
+    output_dir = os.path.dirname(output_path);
+    if output_dir: os.makedirs(output_dir, exist_ok=True)
+    try:
+        with open(output_path, 'w', encoding='utf-8') as f: json.dump(jobs_list, f, indent=4)
+        log.info(f"Saved {len(jobs_list)} scraped jobs to {output_path}"); return jobs_list
+    except Exception as e: log.error(f"Error saving scraped jobs JSON: {e}", exc_info=True); return []
 
-        # --- Step 4: Analyze Jobs ---
-        log.info("--- Stage 4: Analyzing Job Suitability (Async) ---")
-        analyzed_results = await analyze_jobs(analyzer, structured_resume, jobs_list)
+
+# --- print_summary_table function remains synchronous ---
+def print_summary_table(results_json: List[Dict[str, Any]], top_n: int = 10):
+     # (Function content remains the same as previous version)
+     if not results_json: console.print("[yellow]No analysis results to summarize.[/yellow]"); return
+     table = Table(title=f"Top {min(top_n, len(results_json))} Job Matches", show_header=True, header_style="bold magenta", show_lines=False)
+     table.add_column("Score", style="dim", width=6, justify="right"); table.add_column("Title", style="bold", min_width=20); table.add_column("Company"); table.add_column("Location"); table.add_column("URL", overflow="fold", style="cyan")
+     count = 0
+     for result in results_json:
+         if count >= top_n: break
+         analysis = result.get('analysis', {}); original = result.get('original_job_data', {})
+         score = analysis.get('suitability_score', -1)
+         if score is None or score == 0: continue
+         score_str = f"{score}%"
+         table.add_row(score_str, original.get('title', 'N/A'), original.get('company', 'N/A'), original.get('location', 'N/A'), original.get('url', '#'))
+         count += 1
+     if count == 0: console.print("[yellow]No successfully analyzed jobs with score > 0 to display.[/yellow]")
+     else: console.print(table)
+
+
+# --- Main ASYNC Execution Function ---
+async def run_pipeline_async(): # Changed to async def
+    # (Argument Parsing remains the same)
+    parser = argparse.ArgumentParser( description="Run Job Scraping (JobSpy) & GenAI Analysis Pipeline.", formatter_class=argparse.ArgumentDefaultsHelpFormatter )
+    scrape_group = parser.add_argument_group('Scraping Options (JobSpy)')
+    scrape_group.add_argument("--search", required=True, help="Job title, keywords, or company.")
+    scrape_group.add_argument("--location", default=None, help="Primary location for scraping. Overridden if --filter-remote-country.")
+    scrape_group.add_argument("--sites", default=",".join(config.DEFAULT_SCRAPE_SITES), help="Comma-separated sites.")
+    scrape_group.add_argument("--results", type=int, default=config.DEFAULT_RESULTS_LIMIT, help="Approx total jobs per site.")
+    scrape_group.add_argument("--hours-old", type=int, default=config.DEFAULT_HOURS_OLD, help="Max job age in hours (0=disable).")
+    scrape_group.add_argument("--country-indeed", default=config.DEFAULT_COUNTRY_INDEED, help="Country for Indeed search.")
+    scrape_group.add_argument("--proxies", help="Comma-separated proxies.")
+    scrape_group.add_argument("--offset", type=int, default=0, help="Search results offset.")
+    scrape_group.add_argument("--scraped-jobs-file", default=config.DEFAULT_SCRAPED_JSON, help="Intermediate file for scraped jobs.")
+    analysis_group = parser.add_argument_group('Analysis Options')
+    analysis_group.add_argument("--resume", required=True, help="Path to the resume file.")
+    analysis_group.add_argument("--analysis-output", default=config.DEFAULT_ANALYSIS_JSON, help="Final analysis output JSON.")
+    analysis_group.add_argument("-v", "--verbose", action="store_true", help="Enable DEBUG level logging.")
+    filter_group = parser.add_argument_group('Filtering Options (Applied After Analysis)')
+    filter_group.add_argument("--min-salary", type=int, help="Minimum desired annual salary.")
+    filter_group.add_argument("--max-salary", type=int, help="Maximum desired annual salary.")
+    filter_group.add_argument("--filter-work-models", help="Standard work models (e.g., 'Remote,Hybrid').")
+    filter_group.add_argument("--filter-job-types", help="Comma-separated job types (e.g., 'Full-time')")
+    adv_loc_group = parser.add_argument_group('Advanced Location Filtering')
+    adv_loc_group.add_argument("--filter-remote-country", help="Filter REMOTE jobs within specific country.")
+    adv_loc_group.add_argument("--filter-proximity-location", help="Reference location for proximity filtering.")
+    adv_loc_group.add_argument("--filter-proximity-range", type=float, help="Distance in miles for proximity.")
+    adv_loc_group.add_argument("--filter-proximity-models", default="Hybrid,On-site", help="Work models for proximity.")
+    args = parser.parse_args()
+
+    # Setup Logging Level
+    log_level = logging.DEBUG if args.verbose else config.LOG_LEVEL
+    logging.getLogger().setLevel(log_level)
+    log.info(f"[bold green]Starting ASYNC Pipeline Run[/bold green] ({datetime.now().strftime('%Y-%m-%d %H:%M:%S')})")
+
+    # Main Pipeline Logic Wrapped in try...except KeyboardInterrupt
+    try:
+        config.ensure_output_dir()
+        # Validate argument combinations
+        if not args.location and not args.filter_remote_country and not args.filter_proximity_location: parser.error("Ambiguous location: Specify --location OR --filter-remote-country OR --filter-proximity-location.")
+        if args.filter_proximity_location and args.filter_remote_country: parser.error("Conflicting filters: Cannot use --filter-proximity-location and --filter-remote-country.")
+        if args.filter_proximity_location and args.filter_proximity_range is None: parser.error("--filter-proximity-range required with --filter-proximity-location.")
+        if args.filter_proximity_range is not None and not args.filter_proximity_location: parser.error("--filter-proximity-location required with --filter-proximity-range.")
+
+        # Determine scrape location
+        scrape_location = None
+        if args.filter_remote_country: scrape_location = args.filter_remote_country.strip(); log.info(f"Using country '{scrape_location}' as primary scrape location.")
+        elif args.filter_proximity_location: scrape_location = args.filter_proximity_location.strip(); log.info(f"Using proximity target '{scrape_location}' as primary scrape location.")
+        elif args.location: scrape_location = args.location; log.info(f"Using provided --location '{scrape_location}' as primary scrape location.")
+
+        # --- Step 1: Scrape Jobs (Synchronous) ---
+        scraper_sites = [site.strip().lower() for site in args.sites.split(',')]
+        proxy_list = [p.strip() for p in args.proxies.split(',')] if args.proxies else None
+        jobs_df = scrape_jobs_with_jobspy( search_terms=args.search, location=scrape_location, sites=scraper_sites, results_wanted=args.results, hours_old=args.hours_old, country_indeed=args.country_indeed, proxies=proxy_list, offset=args.offset )
+        if jobs_df is None or jobs_df.empty:
+            log.warning("Scraping yielded no results. Exiting."); sys.exit(0) # Exit cleanly
+
+        # --- Step 2: Convert and Save (Synchronous) ---
+        jobs_list = convert_and_save_scraped(jobs_df, args.scraped_jobs_file)
+        if not jobs_list: log.error("Failed to convert/save scraped data. Exiting."); sys.exit(1)
+
+        # --- Step 3: Initialize Analyzer and Load Resume (Load Resume is ASYNC) ---
+        try: analyzer = ResumeAnalyzer()
+        except Exception as e: log.critical(f"Failed to initialize ResumeAnalyzer: {e}.", exc_info=True); sys.exit(1)
+
+        structured_resume = await load_and_extract_resume_async(args.resume, analyzer) # Await async call
+        if not structured_resume: log.critical("Failed to load/extract resume data. Exiting."); sys.exit(1)
+
+        # --- Step 4: Analyze Jobs (ASYNC) ---
+        analyzed_results = await analyze_jobs_async(analyzer, structured_resume, jobs_list) # Await async call
         if not analyzed_results: log.warning("Analysis step produced no results.")
 
-        # --- Step 5: Apply Filters, Sort, and Save ---
-        log.info("--- Stage 5: Filtering, Sorting, and Saving Results ---")
+        # --- Step 5: Apply Filters, Sort, and Save (Synchronous) ---
         filter_args_dict = {}
-        # Populate filter_args_dict including ALL filters
         if args.min_salary is not None: filter_args_dict['salary_min'] = args.min_salary
         if args.max_salary is not None: filter_args_dict['salary_max'] = args.max_salary
         if args.filter_work_models: filter_args_dict['work_models'] = [wm.strip().lower() for wm in args.filter_work_models.split(',')]
         if args.filter_job_types: filter_args_dict['job_types'] = [jt.strip().lower() for jt in args.filter_job_types.split(',')]
-        if args.filter_companies: filter_args_dict['filter_companies'] = [c.strip().lower() for c in args.filter_companies.split(',')]
-        if args.exclude_companies: filter_args_dict['exclude_companies'] = [c.strip().lower() for c in args.exclude_companies.split(',')]
-        if args.filter_title_keywords: filter_args_dict['filter_title_keywords'] = [k.strip().lower() for k in args.filter_title_keywords.split(',')]
-        if args.filter_date_after: filter_args_dict['filter_date_after'] = args.filter_date_after
-        if args.filter_date_before: filter_args_dict['filter_date_before'] = args.filter_date_before
-        filter_args_dict['min_score'] = args.min_score # Pass min_score in dict for apply_filters_sort_and_save
         if args.filter_remote_country: filter_args_dict['filter_remote_country'] = args.filter_remote_country.strip()
         if args.filter_proximity_location:
              filter_args_dict['filter_proximity_location'] = args.filter_proximity_location.strip()
              filter_args_dict['filter_proximity_range'] = args.filter_proximity_range
              filter_args_dict['filter_proximity_models'] = [pm.strip().lower() for pm in args.filter_proximity_models.split(',')]
 
-        final_results_list_dict = apply_filters_sort_and_save(
-            analyzed_results, args.analysis_output, filter_args_dict )
+        final_results_list_dict = apply_filters_sort_and_save( analyzed_results, args.analysis_output, filter_args_dict )
 
         # --- Step 6: Print Summary Table ---
-        log.info("--- Stage 6: Final Summary ---")
+        log.info("[bold blue]Pipeline Summary:[/bold blue]")
         print_summary_table(final_results_list_dict, top_n=10)
+        log.info(f"[bold green]Pipeline Run Finished Successfully[/bold green]")
 
-        log.info(f"[bold green]Pipeline Run Finished Successfully[/bold green]" if RICH_AVAILABLE else "Pipeline Run Finished Successfully")
+    except KeyboardInterrupt: print(); log.warning("[yellow]Pipeline interrupted by user (Ctrl+C).[/yellow]"); sys.exit(130)
+    except Exception as e: log.critical(f"Unexpected critical error during pipeline execution: {e}", exc_info=True); sys.exit(1)
 
-    finally:
-        # Ensure async client is closed even if errors occurred during logic
-        if analyzer and hasattr(analyzer, 'close'):
-             await analyzer.close()
-
-
-# --- Main Entry Point ---
-def main():
-    """Parses args and runs the async pipeline logic."""
-    parser = argparse.ArgumentParser(
-        description="Run Job Scraping (via JobSpy) and GenAI Analysis Pipeline.",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter )
-
-    # --- Argument Groups ---
-    scrape_group = parser.add_argument_group('Scraping Options (JobSpy)')
-    scrape_group.add_argument("--search", required=True, help="Job title, keywords, or company.")
-    scrape_group.add_argument("--location", default=None, help="Primary location for scraping. Overridden if --filter-remote-country.")
-    scrape_group.add_argument("--sites", default=",".join(config.CFG['scraping']['default_sites']), help="Comma-separated sites.")
-    scrape_group.add_argument("--results", type=int, default=config.CFG['scraping']['default_results_limit'], help="Approx total jobs per site.")
-    scrape_group.add_argument("--hours-old", type=int, default=config.CFG['scraping']['default_hours_old'], help="Max job age in hours (0=disable).")
-    scrape_group.add_argument("--country-indeed", default=config.CFG['scraping']['default_country_indeed'], help="Country for Indeed search.")
-    scrape_group.add_argument("--proxies", help="Comma-separated proxies.")
-    scrape_group.add_argument("--offset", type=int, default=0, help="Search results offset.")
-    scrape_group.add_argument("--scraped-jobs-file", default=str(config.DEFAULT_SCRAPED_JSON), help="Intermediate file for scraped jobs.")
-
-    analysis_group = parser.add_argument_group('Analysis Options')
-    analysis_group.add_argument("--resume", required=True, help="Path to the resume file.")
-    analysis_group.add_argument("--analysis-output", default=str(config.DEFAULT_ANALYSIS_JSON), help="Final analysis output JSON.")
-    analysis_group.add_argument("-v", "--verbose", action="store_true", help="Enable DEBUG level logging.")
-    analysis_group.add_argument("--force-resume-reparse", action="store_true", help="Ignore cached resume data and re-parse.")
-
-    filter_group = parser.add_argument_group('Filtering Options (Applied After Analysis)')
-    filter_group.add_argument("--min-salary", type=int, help="Minimum desired annual salary.")
-    filter_group.add_argument("--max-salary", type=int, help="Maximum desired annual salary.")
-    filter_group.add_argument("--filter-work-models", help="Standard work models (e.g., 'Remote,Hybrid').")
-    filter_group.add_argument("--filter-job-types", help="Comma-separated job types (e.g., 'Full-time')")
-    filter_group.add_argument("--filter-companies", help="Include ONLY these companies (comma-sep, case-insensitive).")
-    filter_group.add_argument("--exclude-companies", help="EXCLUDE these companies (comma-sep, case-insensitive).")
-    filter_group.add_argument("--filter-title-keywords", help="Require ANY of these keywords in title (comma-sep, case-insensitive).")
-    filter_group.add_argument("--filter-date-after", help="Include jobs posted ON or AFTER YYYY-MM-DD.")
-    filter_group.add_argument("--filter-date-before", help="Include jobs posted ON or BEFORE YYYY-MM-DD.")
-    filter_group.add_argument("--min-score", type=int, default=0, help="Minimum suitability score filter (0-100). Default 0.")
-
-    adv_loc_group = parser.add_argument_group('Advanced Location Filtering')
-    adv_loc_group.add_argument("--filter-remote-country", help="Filter REMOTE jobs within specific country.")
-    adv_loc_group.add_argument("--filter-proximity-location", help="Reference location for proximity filtering.")
-    adv_loc_group.add_argument("--filter-proximity-range", type=float, help="Distance in miles for proximity.")
-    adv_loc_group.add_argument("--filter-proximity-models", default="Hybrid,On-site", help="Work models for proximity.")
-
-    args = parser.parse_args()
-
-    # --- Setup Logging Level Based on Args AFTER parsing ---
-    final_log_level = logging.DEBUG if args.verbose else config.LOG_LEVEL.upper()
-    try:
-        logging.getLogger().setLevel(final_log_level) # Set root logger level
-        log.info(f"Log level set to: {logging.getLevelName(logging.getLogger().getEffectiveLevel())}")
-    except ValueError:
-         log.error(f"Invalid log level configured: {final_log_level}. Using INFO.")
-         logging.getLogger().setLevel(logging.INFO)
-
-
-    # --- Run the main async logic ---
-    try:
-        if sys.version_info >= (3, 7):
-            asyncio.run(async_pipeline_logic(args))
-        else:
-            # Fallback needed for Python 3.6, though 3.9+ is recommended
-            log.warning("Using legacy asyncio event loop runner (Python < 3.7).")
-            loop = asyncio.get_event_loop()
-            loop.run_until_complete(async_pipeline_logic(args))
-    except KeyboardInterrupt:
-        print(); log.warning("[yellow]Execution interrupted by user (Ctrl+C).[/yellow]" if RICH_AVAILABLE else "Execution interrupted.")
-        # Allow finally block in async_pipeline_logic to run if possible
-        sys.exit(130)
-    except (RuntimeError, ValueError, ConnectionError, FileNotFoundError) as e:
-         # Catch specific critical errors raised by the pipeline
-         log.critical(f"Pipeline failed with critical error: {e}", exc_info=True)
-         sys.exit(1)
-    except Exception as e:
-         # Catch-all for truly unexpected errors
-         log.critical(f"An unexpected critical error occurred: {e}", exc_info=True)
-         sys.exit(1)
-
+# --- Update entry point to run the async function ---
 if __name__ == "__main__":
-    main()
+    # Use asyncio.run() to start the async event loop and run the pipeline
+    try:
+        asyncio.run(run_pipeline_async())
+    except KeyboardInterrupt:
+        # Catch Ctrl+C at the top level if it wasn't caught inside run_pipeline_async
+        print("\nExecution cancelled by user.")
+        sys.exit(130)
