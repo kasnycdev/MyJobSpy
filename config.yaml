@@ -1,20 +1,44 @@
+# config.yaml
 # Default Configuration for MyJobSpy Analyst
 
 # Ollama Settings
 ollama:
-  base_url: "http://localhost:11434" # Can be overridden by OLLAMA_BASE_URL env var
-  model: "llama3:instruct"          # Can be overridden by OLLAMA_MODEL env var
-  request_timeout: 450             # Timeout in seconds for requests
-  max_retries: 2                   # Number of retries on failure
-  retry_delay: 5                   # Base delay (seconds) for exponential backoff
-  # Approx max chars for combined prompt data (resume + job). Tune based on model/memory.
+  base_url: "http://localhost:11434"
+  model: "llama3:instruct"
+  request_timeout: 450
+  max_retries: 2
+  retry_delay: 5
   max_prompt_chars: 24000
 
 # Prompt File Locations (relative to project root)
 prompts:
   directory: "analysis/prompts"
   resume_extraction_file: "resume_extraction.prompt"
-  suitability_analysis_file: "suitability_analysis.prompt" # Make sure this matches your actual filename
+  suitability_analysis_file: "suitability_analysis.prompt" # Make sure this matches actual filename used
 
 # JobSpy Scraping Defaults
 scraping:
+  default_sites: ["linkedin", "indeed"]
+  default_results_limit: 25
+  default_hours_old: 72
+  default_country_indeed: "usa"
+
+# Geocoding Settings
+geocoding:
+  # IMPORTANT: Change this or set GEOPY_USER_AGENT env var
+  user_agent: "MyJobSpyAnalysisBot/1.0 (your_email@example.com)"
+  cache_file: "output/.geocode_cache.json"
+
+# Caching Settings
+caching:
+  resume_cache_dir: "output/.resume_cache"
+
+# Output Defaults
+output:
+  directory: "output"
+  scraped_json_filename: "scraped_jobs.json"
+  analysis_json_filename: "analyzed_jobs.json"
+
+# Logging
+logging:
+  level: "INFO" # Default level (INFO, DEBUG, WARNING, ERROR)
