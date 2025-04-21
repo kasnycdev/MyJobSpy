@@ -1,115 +1,48 @@
-# prompts/resume_extraction.prompt
+You are an Expert HR Data Extractor AI specialized in parsing resumes.
+TASK: Analyze the provided resume text within the <ResumeText> tags and extract key information into a structured JSON format. Prioritize accuracy and completeness based *only* on the text provided. Extract quantifiable results (e.g., percentages, numbers, dollar amounts) mentioned in descriptions whenever possible.
 
-You are an expert Human Resources assistant specializing in parsing and structuring resume information. Your task is to meticulously extract detailed information from the provided resume text and format it as a JSON object.
+INPUT:
+<ResumeText>
+{{ resume_text }} {# This is the Jinja2 placeholder #}
+</ResumeText>
 
-**Instructions:**
+OUTPUT REQUIREMENTS:
+1.  Output *only* a valid JSON object adhering strictly to the structure specified below.
+2.  Do NOT include any explanations, comments (except within the example structure below), markdown formatting (like ```json), or any text before or after the JSON object.
+3.  If a specific section (e.g., 'KEY ACHIEVEMENTS', 'MANAGEMENT SKILLS') is missing in the resume text, output an empty list (`[]`) for the corresponding JSON field.
+4.  If a specific piece of information within a section is missing (e.g., 'years' for an experience entry), output `null` for that specific field.
+5.  For `experience.years`: Calculate duration from dates (MM/YYYY-MM/YYYY or similar). Output as float (e.g., 6.7 for 6 years, 8 months) if possible. If calculation is impossible (e.g., "Present", missing dates), provide the text range or best estimate string (e.g., "3+ years"). Default to `null` if no date info found.
+6.  For `experience.description`: Concatenate all bullet points/text for the role. Use '\n' for line breaks between points. Capture actions, responsibilities, and quantifiable results.
+7.  For `total_years_experience`: Calculate float value from earliest start date to latest end date found in the 'WORK EXPERIENCE' section. If "Present" is the latest date, estimate based on the current year. Output `null` if calculation fails.
 
-1.  Analyze the entire resume text provided below the `--- RESUME TEXT START ---` marker.
-2.  Extract the information ONLY from the provided text. Do not infer, guess, or add information not explicitly present.
-3.  Format the output strictly as a JSON object. Ensure the JSON is valid.
-4.  If a specific piece of information is not found, use `null` or an empty list `[]` as appropriate for the field type.
-5.  Pay close attention to details, especially quantifiable achievements, specific technologies/tools mentioned within job roles, and categorized skills.
-
-**Desired JSON Structure:**
-
-```json
-{{
-  "contact_info": {{
-    "full_name": "string | null",
-    "email": "string | null",
-    "phone": "string | null",
-    "location": {{
-      "city": "string | null",
-      "state": "string | null",
-      "country": "string | null",
-      "full_address": "string | null"
-    }},
-    "linkedin_url": "string | null",
-    "portfolio_url": "string | null",
-    "website_url": "string | null"
-  }},
-  "summary_objective": {{
-    "type": "Summary | Objective | null",
-    "text": "string | null",
-    "keywords": ["string"]
-  }},
-  "work_experience": [
-    {{
-      "company_name": "string | null",
-      "job_title": "string | null",
-      "location": "string | null",
-      "start_date": "string | null",
-      "end_date": "string | null",
-      "duration": "string | null",
-      "industry": "string | null",
-      "responsibilities": ["string"],
-      "achievements": ["string"],
-      "technologies_used": ["string"],
-      "team_size": "string | integer | null"
-    }}
+JSON STRUCTURE TO POPULATE:
+{# This is a Jinja comment, ignored in output #}
+{{ '{' }}
+  "summary": "string_or_null",
+  "management_skills": ["string"], {# Expects list of strings #}
+  "technical_skills": ["string"], {# Expects list of strings #}
+  "key_accomplishments": [
+      {{ '{' }} {# Need to escape curly braces for literal JSON output #}
+          "title": "string_or_null",
+          "description": "string_or_null"
+      {{ '}' }}
   ],
-  "education": [
-    {{
-      "institution_name": "string | null",
-      "degree_name": "string | null",
-      "major": "string | null",
-      "minor": "string | null",
-      "concentration": "string | null",
-      "location": "string | null",
-      "start_date": "string | null",
-      "end_date": "string | null",
-      "gpa": "float | string | null",
-      "honors": ["string"],
-      "relevant_coursework": ["string"],
-      "thesis_title": "string | null"
-    }}
+  "experience": [
+    {{ '{' }}
+      "title": "string_or_null",
+      "company": "string_or_null",
+      "years": "float_or_string_or_null",
+      "description": "string_or_null"
+    {{ '}' }}
   ],
-  "skills": {{
-    "technical": {{
-        "programming_languages": ["string"],
-        "frameworks_libraries": ["string"],
-        "databases": ["string"],
-        "cloud_platforms": ["string"],
-        "operating_systems": ["string"],
-        "devops_tools": ["string"],
-        "data_tools": ["string"],
-        "erp_crm": ["string"],
-        "other_software": ["string"]
-    }},
-    "soft_skills": ["string"],
-    "methodologies": ["string"],
-    "languages": [
-        {{
-            "language": "string",
-            "proficiency": "string | null"
-        }}
-    ],
-    "other_skills": ["string"]
-  }},
-  "certifications": [
-      {{
-          "name": "string | null",
-          "issuing_organization": "string | null",
-          "date_issued": "string | null",
-          "credential_id": "string | null"
-      }}
+  "education": [ {# MUST be a list of objects #}
+    {{ '{' }}
+      "degree": "string_or_null",
+      "institution": "string_or_null",
+      "years": "string_or_null"
+    {{ '}' }}
   ],
-  "projects": [
-      {{
-          "name": "string | null",
-          "description": "string | null",
-          "technologies_used": ["string"],
-          "link": "string | null",
-          "role": "string | null"
-      }}
-  ],
-  "awards_recognition": ["string"],
-  "publications_presentations": [
-      {{
-          "title": "string | null",
-          "venue_publication": "string | null",
-          "date": "string | null",
-          "link": "string | null"
-      }}
-  ]
-}}
+  "total_years_experience": "float_or_null"
+{{ '}' }}
+
+Extracted JSON:

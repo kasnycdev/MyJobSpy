@@ -1,90 +1,50 @@
-# ==================================================
+# config.yaml
 # Default Configuration for MyJobSpy Analyst
-# ==================================================
-# This file defines default settings.
-# Settings can be overridden by environment variables where noted (e.g., OLLAMA_MODEL).
 
-# --- Ollama LLM Settings ---
+# Ollama Settings
 ollama:
-  # Base URL of your running Ollama instance
   base_url: "http://localhost:11434" # Can be overridden by OLLAMA_BASE_URL env var
-
-  # Default LLM model to use for analysis (MUST be pulled in Ollama)
   model: "deepseek-r1:14b"          # Can be overridden by OLLAMA_MODEL env var
+  request_timeout: 600             # Timeout in seconds for requests
+  max_retries: 2                   # Number of retries on failure
+  retry_delay: 5                   # Base delay (seconds) for exponential backoff
+  # Approx max chars for combined prompt data (resume + job). Tune based on model/memory.
+  max_prompt_chars: 24000
+  # Approx max chars for resume text sent for extraction (can be lower than max_prompt_chars)
+  max_resume_extract_chars: 15000
+  # Approx max chars for job description sent in suitability prompt if truncation needed
+  max_job_desc_chars_in_prompt: 5000
 
-  # Timeout in seconds for individual requests to the Ollama API
-  request_timeout: 600
-
-  # Maximum number of retries if an Ollama API call fails (e.g., timeout, network error)
-  max_retries: 2
-
-  # Base delay in seconds for the first retry (subsequent retries use exponential backoff)
-  retry_delay: 5
-
-  # Approximate maximum number of characters for the combined prompt data
-  # (Resume JSON + Job JSON + Prompt Template Text) sent for SUITABILITY analysis.
-  # Helps prevent context window overflows or excessively long processing times.
-  # Tune based on your chosen model's context window and system memory.
-  max_prompt_chars: 100000
-
-# --- Prompt File Locations ---
-# Specifies where the LLM prompt template files are located, relative to the project root.
+# Prompt File Locations (relative to project root)
 prompts:
   directory: "analysis/prompts"
   resume_extraction_file: "resume_extraction.prompt"
-  # Make sure this filename matches the actual prompt file you created/are using
+  # Ensure this matches the actual filename you are using for the suitability prompt
   suitability_analysis_file: "suitability_analysis.prompt"
 
-# --- JobSpy Scraping Defaults ---
-# These values are used if the corresponding command-line arguments are NOT provided.
+# JobSpy Scraping Defaults
 scraping:
-  # Default sites to scrape if --sites argument is omitted.
-  # Check JobSpy documentation for currently supported/reliable sites.
-  # Example: ["linkedin", "indeed", "zip_recruiter"]
-  default_sites: ["linkedin", "glassdoor", "zip_recruiter", "indeed"]
-
-  # Default approximate number of job results to aim for *per site*.
-  default_results_limit: 100
-
-  # Default maximum age of jobs in hours (e.g., 72 for last 3 days).
-  # Set to 0 to disable this filter during scraping.
+  default_sites: ["linkedin"] #["linkedin", "monster", "dice", "glassdoor", "zip_recruiter", "indeed"]
+  default_results_limit: 25
   default_hours_old: 72
-
-  # Default country code specifically for Indeed searches (affects Indeed results region).
-  # Common values: "usa", "ca", "uk", "de", "fr", "au", etc.
   default_country_indeed: "usa"
 
-# --- Geocoding Settings (for Advanced Location Filtering) ---
+# Geocoding Settings
 geocoding:
-  # !! IMPORTANT !! Required by Nominatim service.
-  # Replace with a unique identifier for your application and your contact email.
-  # Format: "AppName/Version (your_email@example.com)"
-  # Can be overridden by GEOPY_USER_AGENT environment variable.
+  # !! IMPORTANT !! Change this or set GEOPY_USER_AGENT env var
   user_agent: "MyJobSpyAnalysisBot/1.0 (your_email@example.com)"
+  cache_file: "output/.geocode_cache.json" # Path relative to project root
 
-  # Path relative to the project root where the geocoding cache (successes/failures) will be stored.
-  cache_file: "output/.geocode_cache.json"
-
-# --- Caching Settings ---
+# Caching Settings
 caching:
-  # Directory relative to the project root where structured resume data (JSON) will be cached.
-  # Files are named based on the resume file's content hash.
-  resume_cache_dir: "output/.resume_cache"
+  resume_cache_dir: "output/.resume_cache" # Path relative to project root
 
-# --- Output Defaults ---
+# Output Defaults
 output:
-  # Default directory relative to the project root where output files are saved.
   directory: "output"
-
-  # Default filename for the intermediate JSON file containing raw scraped jobs.
   scraped_json_filename: "scraped_jobs.json"
-
-  # Default filename for the final JSON file containing analyzed and filtered jobs.
   analysis_json_filename: "analyzed_jobs.json"
 
-# --- Logging Settings ---
+# Logging
 logging:
-  # Default logging level. Options: DEBUG, INFO, WARNING, ERROR, CRITICAL.
-  # Can be overridden by the -v/--verbose command-line flag (sets to DEBUG).
-  # Can be overridden by LOG_LEVEL environment variable.
-  level: "INFO"
+  level: "INFO" # Default level (INFO, DEBUG, WARNING, ERROR)
