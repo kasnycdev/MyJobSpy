@@ -41,7 +41,7 @@ scraping:
   # Default sites to scrape if --sites argument is omitted.
   # Check JobSpy documentation for currently supported/reliable sites.
   # Example: ["linkedin", "indeed", "zip_recruiter"]
-  default_sites: ["linkedin", "glassdoor", "ziprecruiter", "indeed"]
+  default_sites: ["linkedin", "glassdoor", "zip-recruiter", "indeed"]
 
   # Default approximate number of job results to aim for *per site*.
   default_results_limit: 100
