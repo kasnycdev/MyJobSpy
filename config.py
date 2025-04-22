@@ -1,33 +1,49 @@
 # config.py
+import yaml # Requires PyYAML installation
 import os
 import logging
-import yaml # Import YAML
 from pathlib import Path
+from typing import Any # Import Any for type hinting
 
-# Setup basic logging early for loading process itself
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(name)s - %(message)s')
 log = logging.getLogger(__name__)
 
-# --- Configuration Loading ---
+# --- Constants defining paths ---
 PROJECT_ROOT = Path(__file__).parent.resolve()
-CONFIG_FILE = PROJECT_ROOT / "config.yaml"
+DEFAULT_CONFIG_PATH = PROJECT_ROOT / "config.yaml"
+DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "output" # Default relative path
 
-DEFAULT_CONFIG = {
-    # Sensible defaults matching the structure in config.yaml
-    "ollama": { "base_url": "http://localhost:11434", "model": "llama3:instruct",
-                "request_timeout": 450, "max_retries": 2, "retry_delay": 5,
-                "max_prompt_chars": 24000, "max_resume_extract_chars": 15000,
-                "max_job_desc_chars_in_prompt": 5000 },
-    "prompts": { "directory": "analysis/prompts", "resume_extraction_file": "resume_extraction.prompt",
-                 "suitability_analysis_file": "suitability_analysis.prompt" },
-    "scraping": { "default_sites": ["linkedin", "indeed"], "default_results_limit": 25,
-                  "default_hours_old": 72, "default_country_indeed": "usa" },
-    "geocoding": { "user_agent": "MyJobSpyAnalysisBot/1.0 (plz_change@example.com)",
-                   "cache_file": "output/.geocode_cache.json" },
-    "caching": { "resume_cache_dir": "output/.resume_cache" },
-    "output": { "directory": "output", "scraped_json_filename": "scraped_jobs.json",
-                "analysis_json_filename": "analyzed_jobs.json" },
-    "logging": { "level": "INFO" }
+# --- Default Settings (Fallback if YAML is missing fields) ---
+DEFAULT_SETTINGS = {
+    "output_dir": "output", # Keep as relative path here
+    "scraped_jobs_filename": "scraped_jobs.json",
+    "analysis_filename": "analyzed_jobs.json",
+    "ollama": {
+        "base_url": "http://localhost:11434",
+        "model": "llama3:instruct",
+        "request_timeout": 450,
+        "max_retries": 2,
+        "retry_delay": 5,
+    },
+    "analysis": {
+        "prompts_dir": "analysis/prompts",
+        "resume_prompt_file": "resume_extraction.prompt",
+        "suitability_prompt_file": "suitability_analysis.prompt",
+        "max_prompt_chars": 24000,
+    },
+    "scraping": {
+        "default_sites": ["linkedin", "indeed"],
+        "default_results_limit": 25,
+        "default_hours_old": 72,
+        "default_country_indeed": "usa",
+    },
+    "geocoding": {
+        "geopy_user_agent": "MyJobSpyAnalysisBot/1.2 (PLEASE_UPDATE_EMAIL@example.com)"
+    },
+    "logging": {
+        "level": "INFO",
+        "format": "%(message)s",
+        "date_format": "[%X]",
+    }
 }
 
 def _deep_update(source, overrides):
@@ -39,67 +55,67 @@ def _deep_update(source, overrides):
             source[key] = value
     return source
 
-def load_config():
-    config_data = DEFAULT_CONFIG.copy() # Start with defaults
-    if CONFIG_FILE.exists():
-        log.debug(f"Loading configuration from {CONFIG_FILE}")
+def load_config(config_path: Path = DEFAULT_CONFIG_PATH) -> dict:
+    """Loads configuration from YAML file, merging deeply with defaults."""
+    settings = DEFAULT_SETTINGS.copy() # Start with defaults
+
+    if config_path.exists():
+        log.info(f"Loading configuration from {config_path}")
         try:
-            with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
-                yaml_config = yaml.safe_load(f)
-            if yaml_config:
-                # Use deep update for nested dictionaries
-                config_data = _deep_update(config_data, yaml_config)
-                log.info(f"Successfully loaded and merged configuration from {CONFIG_FILE}")
-        except yaml.YAMLError as e: log.error(f"Error parsing YAML {CONFIG_FILE}: {e}. Using defaults.")
-        except Exception as e: log.error(f"Error loading config {CONFIG_FILE}: {e}. Using defaults.")
-    else: log.warning(f"Config file {CONFIG_FILE} not found. Using default settings.")
+            with open(config_path, 'r', encoding='utf-8') as f:
+                user_config = yaml.safe_load(f)
 
-    # --- Environment Variable Overrides ---
-    config_data["ollama"]["base_url"] = os.getenv("OLLAMA_BASE_URL", config_data["ollama"]["base_url"])
-    config_data["ollama"]["model"] = os.getenv("OLLAMA_MODEL", config_data["ollama"]["model"])
-    config_data["geocoding"]["user_agent"] = os.getenv("GEOPY_USER_AGENT", config_data["geocoding"]["user_agent"])
-    config_data["logging"]["level"] = os.getenv("LOG_LEVEL", config_data["logging"]["level"]).upper()
-    # Add integer overrides with error handling
-    for key, env_var in [("request_timeout", "OLLAMA_REQUEST_TIMEOUT"),
-                         ("max_retries", "OLLAMA_MAX_RETRIES"),
-                         ("retry_delay", "OLLAMA_RETRY_DELAY"),
-                         ("max_prompt_chars", "MAX_PROMPT_CHARS"),
-                         ("max_resume_extract_chars", "MAX_RESUME_EXTRACT_CHARS"),
-                         ("max_job_desc_chars_in_prompt", "MAX_JOB_DESC_CHARS_IN_PROMPT")]:
-        env_val = os.getenv(env_var)
-        if env_val:
-            try: config_data["ollama"][key] = int(env_val)
-            except (ValueError, TypeError): log.warning(f"Invalid integer value for env var {env_var}: '{env_val}'")
+            if user_config and isinstance(user_config, dict):
+                # Use deep merge
+                settings = _deep_update(settings, user_config)
+                log.info("Successfully loaded and merged configuration.")
+            elif user_config is None:
+                 log.warning(f"Configuration file {config_path} is empty or invalid. Using default settings.")
+            else:
+                 log.warning(f"Configuration file {config_path} has invalid format (not a dictionary). Using default settings.")
+        except yaml.YAMLError as e:
+            log.error(f"Error parsing YAML configuration file {config_path}: {e}. Using default settings.")
+        except Exception as e:
+            log.error(f"Error loading configuration file {config_path}: {e}. Using default settings.", exc_info=True)
+    else:
+        log.warning(f"Configuration file not found at {config_path}. Using default settings.")
 
-    return config_data
+    # --- Make paths absolute based on PROJECT_ROOT ---
+    settings["output_dir"] = str(PROJECT_ROOT / settings.get("output_dir", "output"))
+    if "analysis" in settings and "prompts_dir" in settings["analysis"]:
+        settings["analysis"]["prompts_dir"] = str(PROJECT_ROOT / settings["analysis"]["prompts_dir"])
 
-# Load config globally
-try:
-    CFG = load_config()
-except Exception as e:
-     log.critical(f"Failed critical configuration loading: {e}", exc_info=True)
-     sys.exit("Configuration loading failed.")
-
-# --- Derived Paths using Pathlib and CFG ---
-# Use .get with defaults to prevent KeyErrors if config loading failed partially
-OUTPUT_DIR = PROJECT_ROOT / CFG.get('output', {}).get('directory', 'output')
-DEFAULT_SCRAPED_JSON = OUTPUT_DIR / CFG.get('output', {}).get('scraped_json_filename', 'scraped_jobs.json')
-DEFAULT_ANALYSIS_JSON = OUTPUT_DIR / CFG.get('output', {}).get('analysis_json_filename', 'analyzed_jobs.json')
-PROMPTS_DIR = PROJECT_ROOT / CFG.get('prompts', {}).get('directory', 'analysis/prompts')
-RESUME_PROMPT_FILE = CFG.get('prompts', {}).get('resume_extraction_file', 'resume_extraction.prompt')
-SUITABILITY_PROMPT_FILE = CFG.get('prompts', {}).get('suitability_analysis_file', 'suitability_analysis.prompt')
-RESUME_CACHE_DIR = PROJECT_ROOT / CFG.get('caching', {}).get('resume_cache_dir', 'output/.resume_cache')
-GEOCODE_CACHE_FILE = PROJECT_ROOT / CFG.get('geocoding', {}).get('cache_file', 'output/.geocode_cache.json')
-LOG_LEVEL = CFG.get('logging', {}).get('level', 'INFO').upper() # For use before full logging setup in run_pipeline
-
-# --- Function to create output/cache dirs ---
-def ensure_required_dirs():
-    """Ensures necessary output and cache directories exist."""
+    # --- Ensure output dir exists ---
     try:
-        OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-        RESUME_CACHE_DIR.mkdir(parents=True, exist_ok=True)
-        GEOCODE_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
-    except OSError as e: log.error(f"Could not create directories: {e}", exc_info=True)
+        os.makedirs(settings["output_dir"], exist_ok=True)
+    except OSError as e:
+        log.error(f"Could not create output directory '{settings['output_dir']}': {e}")
 
-# Ensure directories exist when module is loaded
-ensure_required_dirs()
+    # --- Add derived absolute paths for convenience ---
+    settings["scraped_jobs_path"] = os.path.join(settings["output_dir"], settings.get("scraped_jobs_filename", "scraped_jobs.json"))
+    settings["analysis_output_path"] = os.path.join(settings["output_dir"], settings.get("analysis_filename", "analyzed_jobs.json"))
+    if "analysis" in settings:
+        settings["analysis"]["resume_prompt_path"] = os.path.join(settings["analysis"]["prompts_dir"], settings["analysis"]["resume_prompt_file"])
+        settings["analysis"]["suitability_prompt_path"] = os.path.join(settings["analysis"]["prompts_dir"], settings["analysis"]["suitability_prompt_file"])
+
+    return settings
+
+# --- Load settings ONCE when module is imported ---
+settings = load_config()
+
+# --- Optional: Functions to access settings easily ---
+def get_setting(key_path: str, default: Any = None) -> Any:
+    """Access nested settings using dot notation, e.g., 'ollama.model'."""
+    keys = key_path.split('.')
+    value = settings
+    try:
+        for key in keys:
+            if isinstance(value, dict):
+                 value = value[key]
+            else: # Prevent TypeError if trying to index a non-dict
+                 log.warning(f"Cannot access key '{key}' in non-dictionary element while looking for '{key_path}'.")
+                 return default
+        return value
+    except KeyError:
+        log.debug(f"Setting '{key_path}' not found, returning default '{default}'.")
+        return default

@@ -1,50 +1,39 @@
-# config.yaml
-# Default Configuration for MyJobSpy Analyst
+# config.yaml - User Configuration (Overrides defaults in config.py)
 
-# Ollama Settings
+# --- Output Configuration ---
+output_dir: output  # Relative to project root, will be made absolute
+scraped_jobs_filename: scraped_jobs.json
+analysis_filename: analyzed_jobs.json
+
+# --- Ollama LLM Configuration ---
 ollama:
-  base_url: "http://localhost:11434" # Can be overridden by OLLAMA_BASE_URL env var
-  model: "deepseek-r1:14b"          # Can be overridden by OLLAMA_MODEL env var
-  request_timeout: 600             # Timeout in seconds for requests
-  max_retries: 2                   # Number of retries on failure
-  retry_delay: 5                   # Base delay (seconds) for exponential backoff
-  # Approx max chars for combined prompt data (resume + job). Tune based on model/memory.
+  base_url: http://localhost:11434
+  model: llama3:instruct           # Choose your preferred model
+  request_timeout: 450           # Timeout in seconds (increase if needed)
+  max_retries: 2
+  retry_delay: 5
+
+# --- Analysis Configuration ---
+analysis:
+  prompts_dir: analysis/prompts      # Relative path
+  resume_prompt_file: resume_extraction.prompt
+  suitability_prompt_file: suitability_analysis.prompt
   max_prompt_chars: 24000
-  # Approx max chars for resume text sent for extraction (can be lower than max_prompt_chars)
-  max_resume_extract_chars: 15000
-  # Approx max chars for job description sent in suitability prompt if truncation needed
-  max_job_desc_chars_in_prompt: 5000
 
-# Prompt File Locations (relative to project root)
-prompts:
-  directory: "analysis/prompts"
-  resume_extraction_file: "resume_extraction.prompt"
-  # Ensure this matches the actual filename you are using for the suitability prompt
-  suitability_analysis_file: "suitability_analysis.prompt"
-
-# JobSpy Scraping Defaults
+# --- JobSpy Scraping Defaults ---
 scraping:
-  default_sites: ["linkedin"] #["linkedin", "monster", "dice", "glassdoor", "zip_recruiter", "indeed"]
+  default_sites: ["linkedin", "indeed"] # Sensible defaults
   default_results_limit: 25
   default_hours_old: 72
   default_country_indeed: "usa"
 
-# Geocoding Settings
+# --- Geocoding (IMPORTANT: SET YOUR USER AGENT) ---
 geocoding:
-  # !! IMPORTANT !! Change this or set GEOPY_USER_AGENT env var
-  user_agent: "MyJobSpyAnalysisBot/1.0 (your_email@example.com)"
-  cache_file: "output/.geocode_cache.json" # Path relative to project root
+  # Required by Nominatim. Be specific and include contact info.
+  geopy_user_agent: "MyJobSpyAnalysisApp/1.2 (your_actual_email@domain.com)"
 
-# Caching Settings
-caching:
-  resume_cache_dir: "output/.resume_cache" # Path relative to project root
-
-# Output Defaults
-output:
-  directory: "output"
-  scraped_json_filename: "scraped_jobs.json"
-  analysis_json_filename: "analyzed_jobs.json"
-
-# Logging
+# --- Logging ---
 logging:
-  level: "INFO" # Default level (INFO, DEBUG, WARNING, ERROR)
+  level: INFO                   # Default log level (INFO, DEBUG, WARNING, ERROR)
+  # format: "%(message)s"       # Handled by RichHandler
+  # date_format: "[%X]"         # Handled by RichHandler
